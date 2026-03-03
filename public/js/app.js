@@ -871,3 +871,32 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 });
+
+// ── Check features on load and hide WA if not configured ──
+async function checkFeatures() {
+  try {
+    const res = await fetch('/api/features');
+    const features = await res.json();
+
+    if (!features.whatsapp) {
+      // Hide WhatsApp pill, default to SMS
+      const waPill = document.querySelector('.ch-pill[data-channel="whatsapp"]');
+      if (waPill) waPill.style.display = 'none';
+      state.activeChannel = 'sms';
+      updateChannelPills();
+
+      // Update status indicator
+      const sWA = document.getElementById('sWA');
+      if (sWA) sWA.textContent = '⚫ Not configured';
+    }
+
+    if (!features.configured) {
+      showToast('Missing Twilio config — check Railway Variables', 'error');
+    }
+  } catch(e) {
+    console.warn('[Features] Could not load feature flags');
+  }
+}
+
+// Run on boot
+checkFeatures();

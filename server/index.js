@@ -10,19 +10,23 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 
 const { initWebSocket } = require('./websocket');
-const configRouter = require('./routes/config');
 
 const app = express();
 const server = http.createServer(app);
 
+// Twilio is required, WhatsApp is optional
 const REQUIRED = [
   'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_PHONE_NUMBER',
   'TWILIO_TWIML_APP_SID', 'TWILIO_API_KEY', 'TWILIO_API_SECRET',
-  'WA_PHONE_NUMBER_ID', 'WA_PERMANENT_TOKEN', 'WA_WEBHOOK_VERIFY_TOKEN', 'PUBLIC_URL',
+  'PUBLIC_URL',
 ];
 
 function isConfigured() {
   return REQUIRED.every(k => !!process.env[k]);
+}
+
+function hasWhatsApp() {
+  return !!(process.env.WA_PHONE_NUMBER_ID && process.env.WA_PERMANENT_TOKEN && process.env.WA_WEBHOOK_VERIFY_TOKEN);
 }
 
 app.use(helmet({
@@ -43,48 +47,69 @@ app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
+// Health check - Railway uses this
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', configured: isConfigured(), uptime: Math.floor(process.uptime()) });
+  res.json({
+    status: 'ok',
+    configured: isConfigured(),
+    whatsapp: hasWhatsApp(),
+    uptime: Math.floor(process.uptime()),
+  });
 });
 
-app.use('/api/config', configRouter);
+// Tell the frontend what features are enabled
+app.get('/api/features', (req, res) => {
+  res.json({
+    configured: isConfigured(),
+    whatsapp: hasWhatsApp(),
+    sms: isConfigured(),
+    voice: isConfigured(),
+  });
+});
 
 const limiter = rateLimit({ windowMs: 60_000, max: 200, standardHeaders: true, legacyHeaders: false });
 app.use('/api/', limiter);
-
-app.use((req, res, next) => {
-  if (!isConfigured() && !req.path.startsWith('/api/config') && req.path.startsWith('/api/')) {
-    return res.status(503).json({ error: 'Not configured', message: 'Complete setup at your app URL' });
-  }
-  next();
-});
 
 let routesLoaded = false;
 function loadRoutes() {
   if (routesLoaded) return;
   routesLoaded = true;
+
   const voiceRouter    = require('./routes/voice');
   const smsRouter      = require('./routes/sms');
-  const whatsappRouter = require('./routes/whatsapp');
   const contactsRouter = require('./routes/contacts');
   const tokenRouter    = require('./routes/token');
+
   app.use('/api/token',    tokenRouter);
   app.use('/api/voice',    voiceRouter);
   app.use('/api/sms',      smsRouter);
-  app.use('/api/whatsapp', whatsappRouter);
   app.use('/api/contacts', contactsRouter);
   app.use('/webhook/twilio/voice', voiceRouter);
   app.use('/webhook/twilio/sms',   smsRouter);
-  app.use('/webhook/whatsapp',     whatsappRouter);
-  console.log('[Server] Feature routes loaded');
+
+  // Only load WhatsApp routes if credentials are present
+  if (hasWhatsApp()) {
+    const whatsappRouter = require('./routes/whatsapp');
+    app.use('/api/whatsapp',         whatsappRouter);
+    app.use('/webhook/whatsapp',     whatsappRouter);
+    console.log('[Server] WhatsApp enabled ✓');
+  } else {
+    console.log('[Server] WhatsApp not configured — skipping');
+    // Return friendly error if someone hits the WA endpoint anyway
+    app.use('/api/whatsapp', (req, res) => {
+      res.status(503).json({ error: 'WhatsApp not configured. Add WA_PHONE_NUMBER_ID, WA_PERMANENT_TOKEN and WA_WEBHOOK_VERIFY_TOKEN to enable it.' });
+    });
+  }
+
+  console.log('[Server] Routes loaded ✓');
 }
 
-if (isConfigured()) loadRoutes();
-
-app.use('/api/', (req, res, next) => {
-  if (isConfigured() && !routesLoaded) loadRoutes();
-  next();
-});
+if (isConfigured()) {
+  loadRoutes();
+} else {
+  console.log('[Server] ⚠️  Missing required Twilio env vars — check Railway Variables');
+  console.log('[Server] Required:', REQUIRED.filter(k => !process.env[k]));
+}
 
 app.use(express.static(path.join(__dirname, '../public'), {
   setHeaders: (res, fp) => {
@@ -108,10 +133,15 @@ app.set('wss', wss);
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`\n🚀 Softphone running on port ${PORT}`);
+  console.log(`   Twilio: ${isConfigured() ? '✓' : '✗ NOT CONFIGURED'}`);
+  console.log(`   WhatsApp: ${hasWhatsApp() ? '✓' : 'not configured (optional)'}`);
   if (isConfigured()) {
-    console.log(`\n📡 Webhooks:\n   Twilio Voice: ${process.env.PUBLIC_URL}/webhook/twilio/voice\n   Twilio SMS:   ${process.env.PUBLIC_URL}/webhook/twilio/sms\n   WhatsApp:     ${process.env.PUBLIC_URL}/webhook/whatsapp`);
-  } else {
-    console.log('\n⚠️  Open the app URL to complete setup');
+    console.log(`\n📡 Twilio webhook URLs:`);
+    console.log(`   Voice: ${process.env.PUBLIC_URL}/webhook/twilio/voice`);
+    console.log(`   SMS:   ${process.env.PUBLIC_URL}/webhook/twilio/sms`);
+    if (hasWhatsApp()) {
+      console.log(`   WhatsApp: ${process.env.PUBLIC_URL}/webhook/whatsapp`);
+    }
   }
 });
 
