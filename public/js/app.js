@@ -569,25 +569,37 @@ function renderMessages(phone) {
     const bubble = document.createElement('div');
     bubble.className = `msg-bubble ${msg.direction}`;
 
-    if (msg.channel) {
-      const tag = document.createElement('div');
-      tag.className = `ch-tag tag-${msg.channel}`;
-      tag.textContent = msg.channel === 'whatsapp' ? 'WA' : 'SMS';
-      bubble.appendChild(tag);
+    // Sender label — contact name/number for inbound, "You" for outbound
+    const conv = state.conversations[phone];
+    const sender = document.createElement('div');
+    sender.className = 'msg-sender';
+    if (msg.direction === 'in') {
+      const inName = lookupName(phone) || conv?.name || phone;
+      sender.textContent = inName;
+      sender.classList.add('msg-sender-in');
+    } else {
+      const myName = (window._profileName) || 'You';
+      sender.textContent = myName;
+      sender.classList.add('msg-sender-out');
     }
+    bubble.appendChild(sender);
 
     const text = document.createElement('div');
+    text.className = 'msg-body';
     text.textContent = msg.body;
     bubble.appendChild(text);
 
-    const time = document.createElement('div');
-    time.className = 'msg-time';
-    time.textContent = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    if (msg.direction === 'out' && msg.status === 'pending') time.textContent += ' ⏳';
-    if (msg.direction === 'out' && msg.status === 'failed')  time.textContent += ' ❌';
+    const meta = document.createElement('div');
+    meta.className = 'msg-meta';
+    const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const chLabel = msg.channel === 'whatsapp' ? 'WA' : 'SMS';
+    let statusIcon = '';
+    if (msg.direction === 'out' && msg.status === 'pending') statusIcon = ' ⏳';
+    if (msg.direction === 'out' && msg.status === 'failed')  statusIcon = ' ❌';
+    meta.innerHTML = `<span class="msg-ch-tag tag-${msg.channel || 'sms'}">${chLabel}</span><span class="msg-time">${timeStr}${statusIcon}</span>`;
 
     row.appendChild(bubble);
-    row.appendChild(time);
+    row.appendChild(meta);
     els.messages.appendChild(row);
   });
 
@@ -1019,7 +1031,54 @@ els.addContactConfirm && els.addContactConfirm.addEventListener('click', async (
 /* ============================================================
    SETTINGS PANEL
 ============================================================ */
+// ── Theme ────────────────────────────────────────────────────
+function applyTheme(light) {
+  document.documentElement.setAttribute('data-theme', light ? 'light' : 'dark');
+  try { localStorage.setItem('sp-theme', light ? 'light' : 'dark'); } catch(_) {}
+  const toggle = $('themeToggle');
+  if (toggle) toggle.checked = light;
+}
+
+// Apply saved theme immediately (before settings panel opens)
+(function() {
+  try {
+    const saved = localStorage.getItem('sp-theme');
+    if (saved === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  } catch(_) {}
+})();
+
+// ── Profile ──────────────────────────────────────────────────
+async function loadProfile() {
+  try {
+    const res = await fetch('/api/profile');
+    if (!res.ok) return;
+    const p = await res.json();
+    const name = p.username || 'Agent';
+    const num  = p.phoneNumber || '—';
+    const av = $('profileAvatar'), nm = $('profileName'), nb = $('profileNumber');
+    if (av) { av.textContent = name[0].toUpperCase(); av.style.background = `hsl(${name.charCodeAt(0) * 7 % 360},45%,40%)`; }
+    if (nm) nm.textContent = name;
+    if (nb) nb.textContent = num;
+    window._profileName = name; // used by message bubbles
+  } catch(_) {}
+}
+
+$('profileLogout') && $('profileLogout').addEventListener('click', async () => {
+  await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+  location.href = '/login';
+});
+
 window.loadSettingsPanel = async function() {
+  // Profile
+  await loadProfile();
+
+  // Theme toggle
+  const toggle = $('themeToggle');
+  if (toggle) {
+    try { toggle.checked = localStorage.getItem('sp-theme') === 'light'; } catch(_) {}
+    toggle.onchange = () => applyTheme(toggle.checked);
+  }
+
   try {
     const res = await fetch('/api/features');
     const f = await res.json();

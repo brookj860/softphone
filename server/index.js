@@ -68,6 +68,15 @@ app.get('/api/features', (req, res) => {
   res.json({ configured: isConfigured(), whatsapp: hasWhatsApp(), sms: isConfigured(), voice: isConfigured(), db: db.isAvailable() });
 });
 
+// Profile — returns logged-in username and registered phone number
+app.get('/api/profile', (req, res) => {
+  if (!validSession(req)) return res.status(401).json({ error: 'Not authenticated' });
+  res.json({
+    username:    process.env.APP_USERNAME || 'admin',
+    phoneNumber: process.env.TWILIO_PHONE_NUMBER || '—',
+  });
+});
+
 // ── TWILIO/WA WEBHOOKS (public — Twilio has no session cookie) ──
 if (isConfigured()) {
   const voiceRouter = require('./routes/voice');

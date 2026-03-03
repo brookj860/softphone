@@ -18,6 +18,19 @@
   --nav-h:    60px;
 }
 
+/* ── Light mode ─────────────────────────────────────────── */
+[data-theme="light"] {
+  --bg:       #f0f0f5;
+  --surface:  #ffffff;
+  --surface2: #f5f5fa;
+  --border:   #dddde8;
+  --text:     #1a1a2e;
+  --text-dim: #8888aa;
+  --text-mid: #5555777;
+}
+[data-theme="light"] .day-line { background: #dddde8; }
+[data-theme="light"] .call-event { background: #f5f5fa; }
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 html { height: 100%; height: -webkit-fill-available; }
@@ -252,25 +265,74 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 
-.msg-row { display: flex; align-items: flex-end; gap: 6px; }
+/* ── Message rows & bubbles ─────────────────────────────────── */
+.msg-row {
+  display: flex; align-items: flex-end; gap: 8px;
+  margin-bottom: 2px;
+}
 .msg-row.out { flex-direction: row-reverse; }
 
+/* Inbound — dark mode: dark slate. Light mode: white */
 .msg-bubble {
-  max-width: 78vw; padding: 9px 13px;
-  border-radius: 16px; font-size: 14px; line-height: 1.5;
+  max-width: 72vw; padding: 8px 13px 6px;
+  border-radius: 18px; font-size: 14px; line-height: 1.5;
+  position: relative;
 }
-.msg-bubble.in  { background: var(--surface2); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
-.msg-bubble.out { background: #1e1e3a; border: 1px solid #2e2e52; border-bottom-right-radius: 4px; }
+.msg-bubble.in {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-bottom-left-radius: 4px;
+}
+/* Outbound — dark mode: deep blue-purple. Light mode: brand accent tint */
+.msg-bubble.out {
+  background: #1c1c40;
+  border: 1px solid #2d2d5e;
+  border-bottom-right-radius: 4px;
+}
 
-.msg-time { font-size: 10px; font-family: var(--mono); color: var(--text-dim); padding: 0 2px; white-space: nowrap; }
+/* ── Sender label ─────────────────────────────────────────── */
+.msg-sender {
+  font-size: 10px; font-family: var(--mono); font-weight: 700;
+  letter-spacing: .04em; margin-bottom: 3px;
+  text-transform: uppercase;
+}
+.msg-sender-in  { color: var(--sms); }   /* blue tint for inbound  */
+.msg-sender-out { color: #8888cc; }      /* muted purple for outbound */
 
-.ch-tag {
+/* ── Message body ─────────────────────────────────────────── */
+.msg-body { color: var(--text); word-break: break-word; }
+
+/* ── Meta row (channel tag + timestamp) ─────────────────── */
+.msg-meta {
+  display: flex; align-items: center; gap: 5px;
+  margin-top: 5px;
+}
+.msg-row.out .msg-meta { flex-direction: row-reverse; }
+
+.msg-ch-tag {
   font-size: 9px; font-family: var(--mono); font-weight: 700;
-  letter-spacing: .07em; padding: 1px 5px; border-radius: 4px;
-  margin-bottom: 3px; display: inline-block;
+  letter-spacing: .06em; padding: 1px 5px; border-radius: 4px;
+  display: inline-block; line-height: 1.6;
 }
-.tag-wa  { background: rgba(37,211,102,.15); color: var(--wa); }
-.tag-sms { background: rgba(74,158,255,.15); color: var(--sms); }
+.tag-whatsapp { background: rgba(37,211,102,.15); color: var(--wa); }
+.tag-sms      { background: rgba(74,158,255,.15); color: var(--sms); }
+.tag-voice    { background: rgba(242,47,70,.12);  color: var(--red); }
+
+.msg-time { font-size: 10px; font-family: var(--mono); color: var(--text-dim); white-space: nowrap; }
+
+/* ── Light mode overrides ─────────────────────────────────── */
+[data-theme="light"] .msg-bubble.in {
+  background: #ffffff;
+  border-color: #e0e0ee;
+}
+[data-theme="light"] .msg-bubble.out {
+  background: #ededfc;
+  border-color: #c8c8f0;
+}
+[data-theme="light"] .msg-sender-in  { color: #2266cc; }
+[data-theme="light"] .msg-sender-out { color: #6644aa; }
+[data-theme="light"] .msg-body       { color: #1a1a2e; }
+[data-theme="light"] .msg-time       { color: #9999aa; }
 
 .call-event {
   display: flex; align-items: center; justify-content: center;

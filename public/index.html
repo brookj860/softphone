@@ -196,14 +196,46 @@
   <div class="screen" id="settingsScreen">
     <div class="settings-screen">
       <div class="settings-inner">
+
+        <!-- Profile -->
+        <div class="settings-section">
+          <div class="settings-section-title">Profile</div>
+          <div class="profile-card">
+            <div class="profile-avatar" id="profileAvatar">?</div>
+            <div class="profile-info">
+              <div class="profile-name" id="profileName">—</div>
+              <div class="profile-number" id="profileNumber">—</div>
+            </div>
+            <button class="profile-logout" id="profileLogout">Sign out</button>
+          </div>
+        </div>
+
+        <!-- Appearance -->
+        <div class="settings-section">
+          <div class="settings-section-title">Appearance</div>
+          <div class="theme-toggle">
+            <span class="theme-toggle-label">Light mode</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="themeToggle">
+              <div class="toggle-track"></div>
+              <div class="toggle-thumb"></div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Status -->
         <div class="settings-section">
           <div class="settings-section-title">Connection Status</div>
           <div id="settingsStatus"></div>
         </div>
+
+        <!-- Webhooks -->
         <div class="settings-section">
           <div class="settings-section-title">Webhook URLs</div>
           <div class="webhook-box" id="settingsWebhooks">Loading…</div>
         </div>
+
+        <!-- Install -->
         <div class="settings-section">
           <div class="settings-section-title">Install as App</div>
           <div class="install-note">
@@ -212,6 +244,7 @@
             <b>Desktop:</b> Click install icon in address bar
           </div>
         </div>
+
       </div>
     </div>
   </div>
