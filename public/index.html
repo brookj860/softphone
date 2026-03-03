@@ -297,12 +297,25 @@
         </div>
       </div>
 
-      <!-- Messages view -->
+      <!-- Messages view — conversation list + thread panel -->
       <div class="arch-view active" id="archMessagesView">
-        <div class="arch-list" id="archMessagesList">
-          <div class="arch-empty">Loading messages…</div>
+        <div class="arch-msg-layout">
+          <!-- Left: conversation list -->
+          <div class="arch-conv-list" id="archConvList">
+            <div class="arch-empty">Loading conversations…</div>
+          </div>
+          <!-- Right: thread detail -->
+          <div class="arch-thread-panel hidden" id="archThreadPanel">
+            <div class="arch-thread-header" id="archThreadHeader">
+              <button class="arch-back-btn" id="archBackBtn">← Back</button>
+              <div class="arch-thread-title" id="archThreadTitle">—</div>
+              <div class="arch-thread-meta" id="archThreadMeta"></div>
+            </div>
+            <div class="arch-thread-messages" id="archThreadMessages">
+              <div class="arch-empty">Select a conversation</div>
+            </div>
+          </div>
         </div>
-        <div class="arch-pagination" id="archMsgPager"></div>
       </div>
 
       <!-- Recordings view -->

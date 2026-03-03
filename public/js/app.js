@@ -1225,7 +1225,7 @@ async function loadArchive() {
       archState.tab = btn.dataset.arch;
       document.querySelectorAll('.arch-view').forEach(v => v.classList.remove('active'));
       $('arch' + btn.dataset.arch.charAt(0).toUpperCase() + btn.dataset.arch.slice(1) + 'View')?.classList.add('active');
-      if (archState.tab === 'messages')   fetchArchiveMessages(0);
+      if (archState.tab === 'messages')   fetchArchiveMessages();
       if (archState.tab === 'recordings') fetchArchiveRecordings();
     };
   });
@@ -1235,13 +1235,22 @@ async function loadArchive() {
   if (searchEl) {
     searchEl.oninput = debounce(() => {
       archState.query = searchEl.value;
-      if (archState.tab === 'messages')   fetchArchiveMessages(0);
+      if (archState.tab === 'messages')   fetchArchiveMessages();
       if (archState.tab === 'recordings') fetchArchiveRecordings();
     }, 350);
   }
 
+  // Back button (mobile)
+  const archBackBtn = $('archBackBtn');
+  if (archBackBtn) {
+    archBackBtn.onclick = () => {
+      $('archThreadPanel')?.classList.add('hidden');
+      document.querySelectorAll('.arch-conv-row').forEach(r => r.classList.remove('active'));
+    };
+  }
+
   // Initial load
-  fetchArchiveMessages(0);
+  fetchArchiveMessages();
 }
 
 function debounce(fn, ms) {
@@ -1249,81 +1258,126 @@ function debounce(fn, ms) {
   return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
 }
 
-// ── Messages ────────────────────────────────────────────────
-async function fetchArchiveMessages(page = 0) {
-  const list = $('archMessagesList');
+// ── Messages — conversation list ────────────────────────────
+async function fetchArchiveMessages() {
+  const list = $('archConvList');
   if (!list) return;
   list.innerHTML = '<div class="arch-empty">Loading…</div>';
-  archState.msgPage = page;
-
-  const params = new URLSearchParams({
-    limit:  PAGE_SIZE,
-    offset: page * PAGE_SIZE,
-    q:      archState.query,
-  });
-  if (archState.channel) params.set('channel', archState.channel);
 
   try {
-    const res = await fetch('/api/archive/messages?' + params);
-    const { messages, total } = await res.json();
-    archState.msgTotal = total;
+    const params = new URLSearchParams({ q: archState.query });
+    const res  = await fetch('/api/archive/conversations?' + params);
+    const { conversations } = await res.json();
 
-    if (!messages.length) {
-      list.innerHTML = '<div class="arch-empty">No messages found.</div>';
-      $('archMsgPager').innerHTML = '';
+    if (!conversations.length) {
+      list.innerHTML = '<div class="arch-empty">No conversations found.</div>';
       return;
     }
 
     list.innerHTML = '';
-    messages.forEach(m => {
-      const name = m.contact_name || m.phone;
-      const ts   = new Date(m.ts);
-      const row  = document.createElement('div');
-      row.className = 'arch-msg-row';
+    conversations.forEach(conv => {
+      const name  = conv.contact_name || conv.phone;
+      const init  = (name[0] || '?').toUpperCase();
+      const color = `hsl(${(conv.phone.charCodeAt(conv.phone.length-1) * 37) % 360},40%,38%)`;
+      const ts    = new Date(conv.last_ts);
+      const chLabel = conv.channel === 'whatsapp' ? 'WA' : 'SMS';
+
+      const row = document.createElement('div');
+      row.className = 'arch-conv-row';
+      row.dataset.phone = conv.phone;
       row.innerHTML = `
-        <div class="arch-msg-top">
-          <span class="arch-msg-dir arch-dir-${m.direction}">${m.direction === 'in' ? 'IN' : 'OUT'}</span>
-          <span class="arch-msg-contact">${escHtml(name)}</span>
-          <span class="arch-msg-ch tag-${m.channel}">${m.channel === 'whatsapp' ? 'WA' : 'SMS'}</span>
-          <span class="arch-msg-time">${ts.toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'})} ${ts.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span>
+        <div class="arch-conv-top">
+          <div class="arch-conv-avatar" style="background:${color}">${init}</div>
+          <div class="arch-conv-name">${escHtml(name)}</div>
+          <div class="arch-conv-time">${fmtArchDate(ts)}</div>
         </div>
-        <div class="arch-msg-body">${escHtml(m.body)}</div>
+        <div class="arch-conv-preview">${escHtml(conv.last_body || '—')}</div>
+        <div class="arch-conv-stats">
+          <span class="arch-conv-stat">💬 ${conv.message_count} messages</span>
+          <span class="arch-conv-stat">↓${conv.inbound_count} ↑${conv.outbound_count}</span>
+          <span class="arch-conv-ch tag-${conv.channel || 'sms'}">${chLabel}</span>
+        </div>
       `;
+      row.addEventListener('click', () => openArchiveThread(conv, row));
       list.appendChild(row);
     });
-
-    // Pagination
-    renderMsgPager(page, total);
   } catch (e) {
-    list.innerHTML = '<div class="arch-empty">Failed to load messages.</div>';
+    list.innerHTML = `<div class="arch-empty">Failed to load.</div>`;
   }
 }
 
-function renderMsgPager(page, total) {
-  const pager = $('archMsgPager');
-  if (!pager) return;
-  const pages = Math.ceil(total / PAGE_SIZE);
-  if (pages <= 1) { pager.innerHTML = ''; return; }
+function fmtArchDate(ts) {
+  const now   = new Date();
+  const today = now.toDateString();
+  const yest  = new Date(now - 86400000).toDateString();
+  if (ts.toDateString() === today) return ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (ts.toDateString() === yest)  return 'Yesterday';
+  return ts.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+}
 
-  pager.innerHTML = '';
-  const info = document.createElement('span');
-  info.className = 'arch-page-info';
-  info.textContent = `${page * PAGE_SIZE + 1}–${Math.min((page + 1) * PAGE_SIZE, total)} of ${total}`;
-  pager.appendChild(info);
+// ── Thread detail ────────────────────────────────────────────
+async function openArchiveThread(conv, rowEl) {
+  // Highlight selected row
+  document.querySelectorAll('.arch-conv-row').forEach(r => r.classList.remove('active'));
+  rowEl.classList.add('active');
 
-  if (page > 0) {
-    const prev = document.createElement('button');
-    prev.className = 'arch-page-btn';
-    prev.textContent = '← Prev';
-    prev.onclick = () => fetchArchiveMessages(page - 1);
-    pager.appendChild(prev);
-  }
-  if (page < pages - 1) {
-    const next = document.createElement('button');
-    next.className = 'arch-page-btn';
-    next.textContent = 'Next →';
-    next.onclick = () => fetchArchiveMessages(page + 1);
-    pager.appendChild(next);
+  const panel    = $('archThreadPanel');
+  const msgArea  = $('archThreadMessages');
+  const title    = $('archThreadTitle');
+  const meta     = $('archThreadMeta');
+  if (!panel || !msgArea) return;
+
+  panel.classList.remove('hidden');
+  msgArea.innerHTML = '<div class="arch-empty">Loading thread…</div>';
+
+  const name = conv.contact_name || conv.phone;
+  title.textContent = name;
+  const first = new Date(conv.first_ts), last = new Date(conv.last_ts);
+  meta.textContent = `${conv.message_count} messages · ${first.toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'})} – ${last.toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'})}`;
+
+  try {
+    const res  = await fetch(`/api/archive/conversations/${encodeURIComponent(conv.phone)}/messages`);
+    const { messages } = await res.json();
+
+    msgArea.innerHTML = '';
+    let lastDate = null;
+
+    messages.forEach(m => {
+      const ts      = new Date(m.ts);
+      const dateStr = ts.toDateString();
+
+      if (dateStr !== lastDate) {
+        lastDate = dateStr;
+        const div = document.createElement('div');
+        div.className = 'arch-day-divider';
+        div.textContent = ts.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+        msgArea.appendChild(div);
+      }
+
+      const wrap  = document.createElement('div');
+      wrap.className = `arch-tmsg ${m.direction}`;
+
+      const sender = document.createElement('div');
+      sender.className = 'arch-tmsg-sender';
+      sender.textContent = m.direction === 'in' ? (name) : (window._profileName || 'You');
+
+      const bubble = document.createElement('div');
+      bubble.className = 'arch-tmsg-bubble';
+      bubble.textContent = m.body;
+
+      const time = document.createElement('div');
+      time.className = 'arch-tmsg-time';
+      time.textContent = ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      wrap.appendChild(sender);
+      wrap.appendChild(bubble);
+      wrap.appendChild(time);
+      msgArea.appendChild(wrap);
+    });
+
+    msgArea.scrollTop = msgArea.scrollHeight;
+  } catch (e) {
+    msgArea.innerHTML = '<div class="arch-empty">Failed to load thread.</div>';
   }
 }
 

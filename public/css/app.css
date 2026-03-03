@@ -1023,3 +1023,131 @@ body {
 }
 .pd-avatar-wrap:hover .pd-avatar-overlay { opacity: 1; }
 .pd-user-info { flex: 1; min-width: 0; }
+
+/* ── Archive conversation/thread layout ─────────────────── */
+.arch-msg-layout {
+  display: flex; flex: 1; overflow: hidden; min-height: 0;
+}
+
+/* Conversation list — left column */
+.arch-conv-list {
+  width: 300px; flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  overflow-y: auto; height: 100%;
+}
+.arch-conv-row {
+  padding: 12px 14px; border-bottom: 1px solid var(--border);
+  cursor: pointer; transition: background .1s;
+}
+.arch-conv-row:hover   { background: var(--surface2); }
+.arch-conv-row.active  { background: var(--surface2); border-left: 3px solid var(--accent); }
+
+.arch-conv-top {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
+}
+.arch-conv-avatar {
+  width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; font-family: var(--mono); color: #fff;
+}
+.arch-conv-name {
+  font-size: 13px; font-weight: 600; color: var(--text); flex: 1;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.arch-conv-time {
+  font-size: 10px; font-family: var(--mono); color: var(--text-dim);
+  white-space: nowrap; flex-shrink: 0;
+}
+.arch-conv-preview {
+  font-size: 12px; color: var(--text-dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  padding-left: 42px;
+}
+.arch-conv-stats {
+  display: flex; gap: 8px; padding-left: 42px; margin-top: 3px;
+}
+.arch-conv-stat {
+  font-size: 10px; font-family: var(--mono); color: var(--text-dim);
+}
+.arch-conv-ch {
+  font-size: 9px; font-family: var(--mono); font-weight: 700;
+  padding: 1px 5px; border-radius: 4px;
+}
+
+/* Thread panel — right column */
+.arch-thread-panel {
+  flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0;
+}
+.arch-thread-panel.hidden { display: none; }
+
+.arch-thread-header {
+  padding: 12px 16px; border-bottom: 1px solid var(--border);
+  flex-shrink: 0; background: var(--surface);
+}
+.arch-back-btn {
+  display: none; /* hidden on desktop */
+  background: transparent; border: none; color: var(--accent);
+  font-size: 13px; font-family: var(--mono); cursor: pointer;
+  margin-bottom: 6px; padding: 0;
+}
+.arch-thread-title { font-size: 15px; font-weight: 600; }
+.arch-thread-meta  { font-size: 11px; font-family: var(--mono); color: var(--text-dim); margin-top: 3px; }
+
+.arch-thread-messages {
+  flex: 1; overflow-y: auto; padding: 12px 16px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+
+/* Thread message bubbles */
+.arch-tmsg {
+  display: flex; flex-direction: column; max-width: 72%;
+}
+.arch-tmsg.in  { align-self: flex-start; }
+.arch-tmsg.out { align-self: flex-end; align-items: flex-end; }
+
+.arch-tmsg-sender {
+  font-size: 10px; font-family: var(--mono); font-weight: 700;
+  text-transform: uppercase; margin-bottom: 3px;
+  letter-spacing: .04em;
+}
+.arch-tmsg.in  .arch-tmsg-sender { color: var(--sms); }
+.arch-tmsg.out .arch-tmsg-sender { color: #8888cc; }
+
+.arch-tmsg-bubble {
+  padding: 8px 12px 6px; border-radius: 16px;
+  font-size: 13px; line-height: 1.5; word-break: break-word;
+}
+.arch-tmsg.in  .arch-tmsg-bubble {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-bottom-left-radius: 4px;
+}
+.arch-tmsg.out .arch-tmsg-bubble {
+  background: #1c1c40; border: 1px solid #2d2d5e;
+  border-bottom-right-radius: 4px; color: var(--text);
+}
+.arch-tmsg-time {
+  font-size: 10px; font-family: var(--mono); color: var(--text-dim);
+  margin-top: 3px; padding: 0 2px;
+}
+
+.arch-day-divider {
+  display: flex; align-items: center; gap: 10px;
+  margin: 8px 0; color: var(--text-dim); font-size: 11px;
+  font-family: var(--mono);
+}
+.arch-day-divider::before, .arch-day-divider::after {
+  content: ''; flex: 1; height: 1px; background: var(--border);
+}
+
+/* Mobile: full-screen drill-down */
+@media (max-width: 767px) {
+  .arch-conv-list   { width: 100%; border-right: none; }
+  .arch-thread-panel { position: absolute; inset: 0; background: var(--bg); z-index: 10; }
+  .arch-back-btn    { display: block; }
+  .arch-msg-layout  { position: relative; }
+}
+
+/* Light mode */
+[data-theme="light"] .arch-tmsg.out .arch-tmsg-bubble {
+  background: #ededfc; border-color: #c8c8f0; color: #1a1a2e;
+}
