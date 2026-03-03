@@ -295,27 +295,13 @@ async function loadMessagesForConversation(phone) {
 /* ============================================================
    TWILIO DEVICE
 ============================================================ */
-function waitForSDK() {
-  return new Promise((resolve, reject) => {
-    if (typeof Twilio !== 'undefined' && Twilio.Device) return resolve();
-    let attempts = 0;
-    const check = setInterval(() => {
-      if (typeof Twilio !== 'undefined' && Twilio.Device) {
-        clearInterval(check);
-        resolve();
-      } else if (++attempts > 40) {  // 10 seconds
-        clearInterval(check);
-        reject(new Error('Twilio SDK did not load — check network connection'));
-      }
-    }, 250);
-  });
-}
-
 async function initTwilio() {
   try {
     setStatus('twilio', 'connecting');
 
-    await waitForSDK();
+    if (typeof Twilio === 'undefined' || !Twilio.Device) {
+      throw new Error('Twilio SDK not loaded — check /js/twilio.min.js is being served');
+    }
 
     const res = await fetch('/api/token?identity=softphone-agent');
     if (!res.ok) throw new Error('Token fetch failed — check TWILIO_API_KEY and TWILIO_API_SECRET in Railway');

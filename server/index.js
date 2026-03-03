@@ -136,13 +136,6 @@ if (isConfigured()) loadRoutes();
 // Login page
 app.get('/login', (req, res) => res.sendFile(path.join(__dirname, '../public/login.html')));
 
-// Serve Twilio Voice SDK from npm package (v2.x no longer on CDN)
-app.get('/js/twilio.min.js', (req, res) => {
-  const sdkPath = require.resolve('@twilio/voice-sdk/dist/twilio.min.js');
-  res.setHeader('Content-Type', 'application/javascript');
-  res.setHeader('Cache-Control', 'public, max-age=86400');
-  res.sendFile(sdkPath);
-});
 
 // Static files
 app.use(express.static(path.join(__dirname, '../public'), {
