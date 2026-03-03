@@ -1161,3 +1161,10 @@ body {
   transition: border-color .15s;
 }
 .settings-archive-link:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Archive nav link ───────────────────────────────────── */
+a.nav-archive-btn {
+  text-decoration: none;
+  color: var(--text-dim);
+}
+a.nav-archive-btn:hover { color: var(--accent); }
