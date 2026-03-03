@@ -151,7 +151,7 @@ $('navConv')     && $('navConv').addEventListener('click',     () => showScreen(
 $('navDial')     && $('navDial').addEventListener('click',     () => showScreen('dial'));
 $('navContacts') && $('navContacts').addEventListener('click', () => { showScreen('contacts'); loadContacts(); });
 $('navSettings') && $('navSettings').addEventListener('click', () => { showScreen('settings'); loadSettingsPanel(); });
-els.backBtn      && els.backBtn.addEventListener('click', goBack);
+els.backBtn && els.backBtn.addEventListener('click', goBack);
 
 /* ============================================================
    WEBSOCKET
@@ -248,36 +248,49 @@ async function loadHistory() {
     const convs = await res.json();
     if (!convs.length) return;
 
+    // First pass: populate conversation list so UI shows immediately
     for (const conv of convs) {
-      ensureConversation(conv.phone, conv.name, conv.channel);
-      const c = state.conversations[conv.phone];
+      const phone = normalizePhone(conv.phone);
+      ensureConversation(phone, conv.name, conv.channel);
+      const c = state.conversations[phone];
       c.lastBody = conv.lastBody || '';
       c.lastTs   = conv.lastTs || new Date().toISOString();
       c.unread   = conv.unread || 0;
     }
-
     renderConvList();
     updateUnreadBadge();
 
-    // Eagerly load messages for all conversations so history is visible immediately
-    const phoneList = convs.map(c => c.phone);
-    await Promise.all(phoneList.map(phone => loadMessagesForConversation(phone)));
-    console.log(`[History] Loaded messages for ${phoneList.length} conversations`);
-    renderConvList(); // re-render in case anything changed
-  } catch (e) { console.warn('[History]', e.message); }
+    // Second pass: load all messages in parallel so history is ready when you tap a conversation
+    await Promise.all(
+      convs.map(conv => loadMessagesForConversation(normalizePhone(conv.phone)))
+    );
+    console.log(`[History] Loaded ${convs.length} conversations with messages`);
+  } catch (e) {
+    console.warn('[History] Load failed:', e.message);
+  }
 }
 
 async function loadMessagesForConversation(phone) {
   try {
-    const res = await fetch(`/api/conversations/${encodeURIComponent(phone)}/messages`);
+    phone = normalizePhone(phone);
+    const res = await fetch('/api/conversations/' + encodeURIComponent(phone) + '/messages');
     if (!res.ok) return;
     const messages = await res.json();
     const conv = state.conversations[phone];
-    if (conv && conv.messages.length === 0 && messages.length > 0) {
-      conv.messages = messages;
+    if (conv && messages.length > 0) {
+      // Merge: keep any locally-added messages not yet in server, prepend server history
+      const localNew = conv.messages.filter(m => m.pending);
+      conv.messages = [...messages, ...localNew];
+      // Update preview from most recent message
+      const last = messages[messages.length - 1];
+      if (last && !conv.lastBody) conv.lastBody = last.body;
     }
-  } catch (e) { console.warn('[History] messages:', e.message); }
+  } catch (e) {
+    // silently ignore per-conversation failures
+  }
 }
+
+
 
 /* ============================================================
    TWILIO DEVICE
@@ -359,7 +372,7 @@ function showIncomingCall(from, callSid, conn) {
   }, 30_000);
 }
 
-els.btnAccept.addEventListener('click', () => {
+els.btnAccept && els.btnAccept.addEventListener('click', () => {
   clearTimeout(els.btnAccept._timer);
   els.incomingModal.classList.add('hidden');
   if (pendingIncomingConn?.accept) {
@@ -372,7 +385,7 @@ els.btnAccept.addEventListener('click', () => {
   }
 });
 
-els.btnReject.addEventListener('click', () => {
+els.btnReject && els.btnReject.addEventListener('click', () => {
   clearTimeout(els.btnAccept._timer);
   els.incomingModal.classList.add('hidden');
   if (pendingIncomingConn?.reject) pendingIncomingConn.reject();
@@ -419,14 +432,14 @@ function endCallUI() {
   pendingIncomingConn = null;
 }
 
-els.btnEndCall.addEventListener('click', () => {
+els.btnEndCall && els.btnEndCall.addEventListener('click', () => {
   if (state.activeCall && state.activeCall.disconnect) state.activeCall.disconnect();
   Twilio.Device.disconnectAll();
   endCallUI();
 });
 
 let muted = false;
-els.btnMute.addEventListener('click', () => {
+els.btnMute && els.btnMute.addEventListener('click', () => {
   muted = !muted;
   if (state.activeCall?.mute) state.activeCall.mute(muted);
   els.btnMute.textContent = muted ? '🔇 Unmute' : '🎤 Mute';
@@ -443,11 +456,11 @@ document.querySelectorAll('.key[data-digit]').forEach(btn => {
   });
 });
 
-els.btnDelDigit.addEventListener('click', () => {
+els.btnDelDigit && els.btnDelDigit.addEventListener('click', () => {
   els.dialInput.value = els.dialInput.value.slice(0, -1);
 });
 
-els.btnDialCall.addEventListener('click', () => {
+els.btnDialCall && els.btnDialCall.addEventListener('click', () => {
   const to = els.dialInput.value.trim();
   if (!to) return showToast('Enter a number first', 'info');
   if (!state.twilioDevice) return showToast('Twilio Voice not ready', 'error');
@@ -671,11 +684,11 @@ function markMsgFailed(phone, msgId) {
 /* ============================================================
    SEND MESSAGE
 ============================================================ */
-els.sendBtn.addEventListener('click', sendMessage);
-els.composeInput.addEventListener('keydown', e => {
+els.sendBtn && els.sendBtn.addEventListener('click', sendMessage);
+els.composeInput && els.composeInput.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 });
-els.composeInput.addEventListener('input', () => {
+els.composeInput && els.composeInput.addEventListener('input', () => {
   els.composeInput.style.height = 'auto';
   els.composeInput.style.height = Math.min(els.composeInput.scrollHeight, 120) + 'px';
 });
@@ -728,7 +741,7 @@ function updateChannelPills() {
 /* ============================================================
    CALL BUTTON IN CHAT HEADER
 ============================================================ */
-els.btnCall.addEventListener('click', () => {
+els.btnCall && els.btnCall.addEventListener('click', () => {
   const phone = els.btnCall.dataset.phone || state.activePhone;
   if (!phone) return;
   makeCall(phone);
@@ -903,9 +916,9 @@ els.contactSearch && els.contactSearch.addEventListener('input', () => loadConta
 /* ============================================================
    NEW CONVERSATION MODAL
 ============================================================ */
-els.newConvBtn.addEventListener('click', () => els.newConvModal.classList.remove('hidden'));
-els.newConvCancel.addEventListener('click', () => els.newConvModal.classList.add('hidden'));
-els.newConvConfirm.addEventListener('click', () => {
+els.newConvBtn && els.newConvBtn.addEventListener('click', () => els.newConvModal.classList.remove('hidden'));
+els.newConvCancel && els.newConvCancel.addEventListener('click', () => els.newConvModal.classList.add('hidden'));
+els.newConvConfirm && els.newConvConfirm.addEventListener('click', () => {
   const phone = els.newConvPhone.value.trim();
   const name  = els.newConvName.value.trim();
   if (!phone) return;
@@ -954,9 +967,9 @@ function renderContactList(contacts) {
   });
 }
 
-els.addContactBtn.addEventListener('click', () => els.addContactModal.classList.remove('hidden'));
-els.addContactCancel.addEventListener('click', () => els.addContactModal.classList.add('hidden'));
-els.addContactConfirm.addEventListener('click', async () => {
+els.addContactBtn && els.addContactBtn.addEventListener('click', () => els.addContactModal.classList.remove('hidden'));
+els.addContactCancel && els.addContactCancel.addEventListener('click', () => els.addContactModal.classList.add('hidden'));
+els.addContactConfirm && els.addContactConfirm.addEventListener('click', async () => {
   const name  = els.contactNameInput.value.trim();
   const phone = els.contactPhoneInput.value.trim();
   if (!name || !phone) return;
