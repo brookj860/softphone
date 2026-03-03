@@ -1183,6 +1183,27 @@ async function checkFeatures() {
 
 
 /* ============================================================
+   IMAGE RESIZE (client-side before upload)
+============================================================ */
+function resizeImage(file, maxPx) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+      const w = Math.round(img.width  * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      canvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.88);
+    };
+    img.src = url;
+  });
+}
+
+/* ============================================================
    ARCHIVE
 ============================================================ */
 const archState = {
@@ -1416,26 +1437,94 @@ window.bootApp = async function() {
     location.href = '/login';
   });
 
-  // Load profile into nav dropdown
-  fetch('/api/profile').then(r => r.json()).then(p => {
-    const name = p.username || 'Agent';
-    const num  = p.phoneNumber || '—';
-    window._profileName = name;
-    const av = $('navProfileAvatar');
-    if (av) {
-      av.textContent = name[0].toUpperCase();
-      av.style.background = `hsl(${name.charCodeAt(0) * 7 % 360},45%,40%)`;
-    }
-    const pdName = $('pdName'), pdNum = $('pdNumber');
-    if (pdName) pdName.textContent = name;
-    if (pdNum)  pdNum.textContent  = num;
-    // Also keep settings panel in sync
-    const profileName = $('profileName'), profileNumber = $('profileNumber');
-    if (profileName)   profileName.textContent   = name;
-    if (profileNumber) profileNumber.textContent = num;
-    const profileAvatar = $('profileAvatar');
-    if (profileAvatar) { profileAvatar.textContent = name[0].toUpperCase(); profileAvatar.style.background = `hsl(${name.charCodeAt(0) * 7 % 360},45%,40%)`; }
-  }).catch(() => {});
+  // Load profile into nav dropdown (including avatar photo)
+  async function loadProfileIntoNav() {
+    try {
+      const res = await fetch('/api/profile');
+      if (!res.ok) return;
+      const p = await res.json();
+      const name = p.username || 'Agent';
+      const num  = p.phoneNumber || '—';
+      window._profileName = name;
+      const initials = name[0].toUpperCase();
+      const color    = `hsl(${name.charCodeAt(0) * 7 % 360},45%,40%)`;
+
+      // Nav small avatar
+      const navAv = $('navProfileAvatar');
+      if (navAv) {
+        if (p.avatar) {
+          navAv.innerHTML = `<img src="${p.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+        } else {
+          navAv.textContent = initials;
+          navAv.style.background = color;
+        }
+      }
+
+      // Dropdown big avatar
+      const bigAv = $('pdBigAvatar');
+      if (bigAv) {
+        if (p.avatar) {
+          bigAv.innerHTML = `<img src="${p.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+          bigAv.style.background = 'transparent';
+        } else {
+          bigAv.innerHTML = initials;
+          bigAv.style.background = color;
+        }
+      }
+
+      const pdName = $('pdName'), pdNum = $('pdNumber');
+      if (pdName) pdName.textContent = name;
+      if (pdNum)  pdNum.textContent  = num;
+
+      // Settings panel avatar if open
+      const profileAvatar = $('profileAvatar');
+      if (profileAvatar) {
+        if (p.avatar) {
+          profileAvatar.innerHTML = `<img src="${p.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+        } else {
+          profileAvatar.textContent = initials;
+          profileAvatar.style.background = color;
+        }
+      }
+      const profileName   = $('profileName');
+      const profileNumber = $('profileNumber');
+      if (profileName)   profileName.textContent   = name;
+      if (profileNumber) profileNumber.textContent = num;
+    } catch(_) {}
+  }
+
+  await loadProfileIntoNav();
+
+  // Avatar upload — click the big avatar in the dropdown
+  const pdAvatarWrap  = $('pdAvatarWrap');
+  const avatarFileInput = $('avatarFileInput');
+  if (pdAvatarWrap && avatarFileInput) {
+    pdAvatarWrap.addEventListener('click', (e) => {
+      e.stopPropagation(); // don't close dropdown
+      avatarFileInput.click();
+    });
+    avatarFileInput.addEventListener('change', async () => {
+      const file = avatarFileInput.files[0];
+      if (!file) return;
+
+      // Resize client-side to max 200x200 before uploading
+      const resized = await resizeImage(file, 200);
+
+      const form = new FormData();
+      form.append('avatar', resized, 'avatar.jpg');
+
+      showToast('Uploading photo…', 'info');
+      try {
+        const res = await fetch('/api/profile/avatar', { method: 'POST', body: form });
+        if (!res.ok) throw new Error('Upload failed');
+        showToast('Profile photo updated ✓', 'success');
+        await loadProfileIntoNav();
+      } catch (err) {
+        showToast('Upload failed: ' + err.message, 'error');
+      }
+      avatarFileInput.value = ''; // reset so same file can be re-selected
+    });
+  }
 
   connectWS();
   await loadHistory();

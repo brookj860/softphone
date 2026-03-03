@@ -62,6 +62,15 @@ async function init() {
     `);
     // Fix any blank channel values from old data
     await db.query(`UPDATE conversations SET channel = 'sms' WHERE channel IS NULL OR channel = ''`).catch(() => {});
+    // Add avatar column if it doesn't exist (safe migration)
+    await db.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS avatar TEXT`).catch(() => {});
+    // Add app_settings table for profile photo and other prefs
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS app_settings (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )
+    `);
     console.log('[DB] Connected and tables ready ✓');
     return true;
   } catch (err) {
@@ -193,6 +202,25 @@ async function lookupContact(phone) {
   }
 }
 
+async function getSetting(key) {
+  try {
+    const connStr = process.env.DATABASE_URL || process.env.DATABASE_PRIVATE_URL || process.env.DATABASE_PUBLIC_URL;
+    if (!connStr) return null;
+    const { rows } = await getPool().query(`SELECT value FROM app_settings WHERE key = $1`, [key]);
+    return rows[0]?.value || null;
+  } catch { return null; }
+}
+
+async function setSetting(key, value) {
+  try {
+    await getPool().query(`
+      INSERT INTO app_settings (key, value) VALUES ($1, $2)
+      ON CONFLICT (key) DO UPDATE SET value = $2
+    `, [key, value]);
+    return true;
+  } catch { return false; }
+}
+
 module.exports = {
   init,
   isAvailable: () => !!(process.env.DATABASE_URL || process.env.DATABASE_PRIVATE_URL || process.env.DATABASE_PUBLIC_URL),
@@ -206,4 +234,6 @@ module.exports = {
   saveContact,
   deleteContact,
   lookupContact,
+  getSetting,
+  setSetting,
 };

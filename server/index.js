@@ -68,13 +68,40 @@ app.get('/api/features', (req, res) => {
   res.json({ configured: isConfigured(), whatsapp: hasWhatsApp(), sms: isConfigured(), voice: isConfigured(), db: db.isAvailable() });
 });
 
-// Profile — returns logged-in username and registered phone number
-app.get('/api/profile', (req, res) => {
+// Profile — returns logged-in username, phone number, and avatar
+app.get('/api/profile', async (req, res) => {
   if (!validSession(req)) return res.status(401).json({ error: 'Not authenticated' });
+  const avatar = await db.getSetting('profile_avatar').catch(() => null);
   res.json({
     username:    process.env.APP_USERNAME || 'admin',
     phoneNumber: process.env.TWILIO_PHONE_NUMBER || '—',
+    avatar:      avatar || null,
   });
+});
+
+// Upload profile photo — stores resized base64 in DB
+app.post('/api/profile/avatar', (req, res, next) => {
+  if (!validSession(req)) return res.status(401).json({ error: 'Not authenticated' });
+  next();
+}, uploadMem.single('avatar'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  if (!req.file.mimetype.startsWith('image/')) return res.status(400).json({ error: 'File must be an image' });
+
+  // Convert to base64 data URL
+  const b64 = req.file.buffer.toString('base64');
+  const dataUrl = `data:${req.file.mimetype};base64,${b64}`;
+
+  const ok = await db.setSetting('profile_avatar', dataUrl);
+  if (!ok) return res.status(500).json({ error: 'Failed to save avatar' });
+
+  res.json({ avatar: dataUrl });
+});
+
+// Delete profile avatar
+app.delete('/api/profile/avatar', async (req, res) => {
+  if (!validSession(req)) return res.status(401).json({ error: 'Not authenticated' });
+  await db.setSetting('profile_avatar', '');
+  res.json({ ok: true });
 });
 
 // ── TWILIO/WA WEBHOOKS (public — Twilio has no session cookie) ──

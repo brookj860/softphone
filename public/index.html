@@ -90,8 +90,17 @@
         <span class="nav-profile-avatar" id="navProfileAvatar">?</span>
       </button>
       <div class="profile-dropdown hidden" id="profileDropdown">
-        <div class="pd-name" id="pdName">—</div>
-        <div class="pd-number" id="pdNumber">—</div>
+        <div class="pd-avatar-row">
+          <div class="pd-avatar-wrap" id="pdAvatarWrap" title="Click to change photo">
+            <div class="pd-big-avatar" id="pdBigAvatar">?</div>
+            <div class="pd-avatar-overlay">📷</div>
+          </div>
+          <div class="pd-user-info">
+            <div class="pd-name" id="pdName">—</div>
+            <div class="pd-number" id="pdNumber">—</div>
+          </div>
+        </div>
+        <input type="file" id="avatarFileInput" accept="image/*" style="display:none">
         <div class="pd-divider"></div>
         <button class="pd-logout" id="pdLogout">Sign out</button>
       </div>

@@ -996,3 +996,30 @@ body {
 [data-theme="light"] .arch-tab.active   { background: var(--accent); color: #fff; }
 [data-theme="light"] .archive-search    { background: #fff; }
 [data-theme="light"] .arch-rec-row.playing { background: rgba(37,162,68,.06); }
+
+/* ── Profile dropdown avatar upload ────────────────────── */
+.pd-avatar-row {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 12px;
+}
+.pd-avatar-wrap {
+  position: relative; cursor: pointer; flex-shrink: 0;
+  width: 54px; height: 54px; border-radius: 50%; overflow: hidden;
+}
+.pd-big-avatar {
+  width: 54px; height: 54px; border-radius: 50%;
+  background: var(--accent); color: #fff;
+  font-size: 22px; font-weight: 700; font-family: var(--mono);
+  display: flex; align-items: center; justify-content: center;
+  line-height: 1; overflow: hidden;
+}
+.pd-big-avatar img {
+  width: 100%; height: 100%; object-fit: cover; border-radius: 50%;
+}
+.pd-avatar-overlay {
+  position: absolute; inset: 0; border-radius: 50%;
+  background: rgba(0,0,0,.45); display: flex; align-items: center;
+  justify-content: center; font-size: 18px;
+  opacity: 0; transition: opacity .15s;
+}
+.pd-avatar-wrap:hover .pd-avatar-overlay { opacity: 1; }
+.pd-user-info { flex: 1; min-width: 0; }
