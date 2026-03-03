@@ -179,48 +179,47 @@ async function initTwilio() {
   try {
     setStatus('twilio', 'connecting');
     const res = await fetch('/api/token?identity=softphone-agent');
-    if (!res.ok) throw new Error('Token fetch failed');
+    if (!res.ok) throw new Error('Token fetch failed - check Twilio API Key config');
     const { token } = await res.json();
 
-    const device = new Twilio.Device(token, {
+    Twilio.Device.setup(token, {
       codecPreferences: ['opus', 'pcmu'],
       fakeLocalDTMF: true,
       enableRingingState: true,
+      debug: false,
     });
 
-    device.on('ready', () => {
+    Twilio.Device.ready(() => {
       console.log('[Twilio] Device ready');
       setStatus('twilio', 'online');
     });
 
-    device.on('error', (err) => {
-      console.error('[Twilio] Device error', err);
+    Twilio.Device.error((err) => {
+      console.error('[Twilio] Error:', err);
       setStatus('twilio', 'offline');
-      showToast(`Twilio error: ${err.message}`, 'error');
+      showToast('Twilio error: ' + err.message, 'error');
     });
 
-    device.on('incoming', (conn) => {
+    Twilio.Device.incoming((conn) => {
       const from = conn.parameters.From || 'Unknown';
       showIncomingCall(from, null, conn);
     });
 
-    device.on('disconnect', () => {
-      endCallUI();
-    });
+    Twilio.Device.disconnect(() => { endCallUI(); });
+    Twilio.Device.offline(() => setStatus('twilio', 'offline'));
+    Twilio.Device.cancel(() => { els.incomingModal.classList.add('hidden'); });
 
-    device.on('offline', () => setStatus('twilio', 'offline'));
-    device.on('cancel', () => {
-      els.incomingModal.classList.add('hidden');
-    });
+    state.twilioDevice = {
+      connect: (params) => Twilio.Device.connect(params),
+      disconnectAll: () => Twilio.Device.disconnectAll(),
+    };
 
-    // Refresh token before it expires (55 minutes)
     setTimeout(initTwilio, 55 * 60 * 1000);
 
-    state.twilioDevice = device;
   } catch (err) {
     console.error('[Twilio] Init error:', err);
     setStatus('twilio', 'offline');
-    showToast('Could not connect Twilio Voice. Check your config.', 'error');
+    showToast('Twilio: ' + err.message, 'error');
     setTimeout(initTwilio, 10_000);
   }
 }
