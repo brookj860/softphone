@@ -18,6 +18,24 @@ const state = {
 };
 
 /* ============================================================
+   PHONE NORMALISATION
+   Always store as +44... format; merge 07... and +447... as same
+============================================================ */
+function normalizePhone(phone) {
+  if (!phone) return phone;
+  let p = phone.trim().replace(/[\s\-().]/g, '');
+  // UK: 07xxx -> +447xxx
+  if (/^07\d{9}$/.test(p)) return '+44' + p.slice(1);
+  // UK: 447xxx (missing +) -> +447xxx
+  if (/^447\d{9}$/.test(p)) return '+' + p;
+  // Already +44
+  if (/^\+44\d{10}$/.test(p)) return p;
+  // Generic: if starts with 0 and 10+ digits, assume UK
+  if (/^0\d{9,}$/.test(p)) return '+44' + p.slice(1);
+  return p;
+}
+
+/* ============================================================
    DOM SHORTCUTS
 ============================================================ */
 const $ = id => document.getElementById(id);
@@ -206,6 +224,7 @@ function setStatus(key, status) {
    CONVERSATION HELPERS
 ============================================================ */
 function ensureConversation(phone, name, channel) {
+  phone = normalizePhone(phone);
   if (!state.conversations[phone]) {
     state.conversations[phone] = { phone, name: name || phone, channel: channel || 'sms', messages: [], unread: 0, lastBody: '', lastTs: new Date().toISOString() };
   } else {
@@ -227,6 +246,8 @@ async function loadHistory() {
     const res = await fetch('/api/conversations');
     if (!res.ok) return;
     const convs = await res.json();
+    if (!convs.length) return;
+
     for (const conv of convs) {
       ensureConversation(conv.phone, conv.name, conv.channel);
       const c = state.conversations[conv.phone];
@@ -234,8 +255,15 @@ async function loadHistory() {
       c.lastTs   = conv.lastTs || new Date().toISOString();
       c.unread   = conv.unread || 0;
     }
+
     renderConvList();
     updateUnreadBadge();
+
+    // Eagerly load messages for all conversations so history is visible immediately
+    const phoneList = convs.map(c => c.phone);
+    await Promise.all(phoneList.map(phone => loadMessagesForConversation(phone)));
+    console.log(`[History] Loaded messages for ${phoneList.length} conversations`);
+    renderConvList(); // re-render in case anything changed
   } catch (e) { console.warn('[History]', e.message); }
 }
 
@@ -254,9 +282,21 @@ async function loadMessagesForConversation(phone) {
 /* ============================================================
    TWILIO DEVICE
 ============================================================ */
+async function waitForTwilioSDK(attempts = 0) {
+  if (typeof Twilio !== 'undefined' && Twilio.Device) return true;
+  if (attempts > 20) return false;
+  await new Promise(r => setTimeout(r, 500));
+  return waitForTwilioSDK(attempts + 1);
+}
+
 async function initTwilio() {
   try {
     setStatus('twilio', 'connecting');
+
+    // Wait for SDK to load from unpkg (async script)
+    const sdkReady = await waitForTwilioSDK();
+    if (!sdkReady) throw new Error('Twilio SDK failed to load — check network/CSP');
+
     const res = await fetch('/api/token?identity=softphone-agent');
     if (!res.ok) throw new Error('Token fetch failed — check Twilio API Key in Railway vars');
     const { token } = await res.json();
@@ -327,6 +367,7 @@ els.btnReject.addEventListener('click', () => {
 });
 
 async function makeCall(to) {
+  to = normalizePhone(to);
   if (!state.twilioDevice) return showToast('Twilio Voice not ready', 'error');
   try {
     const conn = await state.twilioDevice.connect({ params: { To: to } });
@@ -403,6 +444,7 @@ els.btnDialCall.addEventListener('click', () => {
    OPEN CONVERSATION
 ============================================================ */
 async function openConversation(phone) {
+  phone = normalizePhone(phone);
   const conv = state.conversations[phone];
   if (!conv) return;
 
@@ -557,6 +599,7 @@ function updateUnreadBadge() {
    RECEIVE / ADD MESSAGES
 ============================================================ */
 function receiveMessage(phone, msg, profileName, isSync = false) {
+  phone = normalizePhone(phone);
   const conv = ensureConversation(phone, profileName, msg.channel);
   conv.messages.push(msg);
   conv.lastBody = msg.body;

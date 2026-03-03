@@ -8,9 +8,19 @@ const db = require('../db');
 const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 const MessagingResponse = twilio.twiml.MessagingResponse;
 
+function normalizePhone(phone) {
+  if (!phone) return phone;
+  let p = phone.trim().replace(/[\s\-().]/g, '');
+  if (/^07\d{9}$/.test(p)) return '+44' + p.slice(1);
+  if (/^447\d{9}$/.test(p)) return '+' + p;
+  if (/^0\d{9,}$/.test(p)) return '+44' + p.slice(1);
+  return p;
+}
+
 // POST /webhook/twilio/sms
 router.post('/', async (req, res) => {
-  const { From, To, Body, MessageSid } = req.body;
+  const { To, Body, MessageSid } = req.body;
+  const From = normalizePhone(req.body.From);
   console.log(`[SMS] Inbound from ${From}: "${(Body||'').substring(0, 80)}"`);
 
   const contact = await db.lookupContact(From);
