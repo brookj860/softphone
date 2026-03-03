@@ -546,7 +546,15 @@ function renderConvList() {
   const filter = state.filter;
 
   let items = Object.values(state.conversations);
-  if (filter !== 'all') items = items.filter(c => c.channel === filter);
+  if (filter !== 'all') {
+    items = items.filter(c => {
+      const ch = (c.channel || 'sms').toLowerCase();
+      if (filter === 'sms') return ch === 'sms' || ch === '' || !ch;
+      if (filter === 'voice') return ch === 'voice';
+      if (filter === 'whatsapp') return ch === 'whatsapp';
+      return ch === filter;
+    });
+  }
   if (search) items = items.filter(c => (c.name || '').toLowerCase().includes(search) || c.phone.includes(search));
   items.sort((a, b) => new Date(b.lastTs) - new Date(a.lastTs));
 

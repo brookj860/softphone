@@ -60,6 +60,8 @@ async function init() {
         created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `);
+    // Fix any blank channel values from old data
+    await db.query(`UPDATE conversations SET channel = 'sms' WHERE channel IS NULL OR channel = ''`).catch(() => {});
     console.log('[DB] Connected and tables ready ✓');
     return true;
   } catch (err) {
@@ -72,7 +74,9 @@ async function init() {
 async function getConversations() {
   try {
     const { rows } = await getPool().query(`
-      SELECT * FROM conversations ORDER BY last_ts DESC
+      SELECT *,
+        COALESCE(NULLIF(channel, ''), 'sms') AS channel
+      FROM conversations ORDER BY last_ts DESC
     `);
     return rows;
   } catch (err) {
