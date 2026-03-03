@@ -30,9 +30,9 @@ app.use((req, res, next) => {
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Content-Security-Policy', [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' https://unpkg.com https://sdk.twilio.com https://media.twiliocdn.com",
+    "script-src 'self' 'unsafe-inline' https://sdk.twilio.com https://media.twiliocdn.com",
     "script-src-attr 'unsafe-inline'",
-    "connect-src 'self' wss: ws: https://unpkg.com https://sdk.twilio.com https://media.twiliocdn.com https://eventgw.twilio.com https://graph.facebook.com",
+    "connect-src 'self' wss: ws: https://sdk.twilio.com https://media.twiliocdn.com https://eventgw.twilio.com https://chunderw-vpc-gll.twilio.com https://graph.facebook.com",
     "media-src 'self' blob: https://media.twiliocdn.com",
     "worker-src 'self' blob:",
     "img-src 'self' data: blob:",

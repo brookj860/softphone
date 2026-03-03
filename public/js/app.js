@@ -282,45 +282,58 @@ async function loadMessagesForConversation(phone) {
 /* ============================================================
    TWILIO DEVICE
 ============================================================ */
-async function waitForTwilioSDK(attempts = 0) {
-  if (typeof Twilio !== 'undefined' && Twilio.Device) return true;
-  if (attempts > 20) return false;
-  await new Promise(r => setTimeout(r, 500));
-  return waitForTwilioSDK(attempts + 1);
-}
-
 async function initTwilio() {
   try {
     setStatus('twilio', 'connecting');
-
-    // Wait for SDK to load from unpkg (async script)
-    const sdkReady = await waitForTwilioSDK();
-    if (!sdkReady) throw new Error('Twilio SDK failed to load — check network/CSP');
 
     const res = await fetch('/api/token?identity=softphone-agent');
     if (!res.ok) throw new Error('Token fetch failed — check Twilio API Key in Railway vars');
     const { token } = await res.json();
 
-    // Destroy old device if re-initialising
-    if (state.twilioDevice && state.twilioDevice.destroy) {
-      try { state.twilioDevice.destroy(); } catch(_) {}
-    }
-
-    const device = new Twilio.Device(token, {
-      logLevel: 'warn',
-      codecPreferences: ['pcmu', 'opus'],
+    // v1.14 API uses Twilio.Device.setup() as a singleton
+    Twilio.Device.setup(token, {
+      debug: false,
+      enableRingingState: true,
     });
 
-    device.on('registered',      () => { console.log('[Twilio] registered'); setStatus('twilio', 'online'); });
-    device.on('unregistered',    () => setStatus('twilio', 'offline'));
-    device.on('error',           (err) => { console.error('[Twilio]', err); setStatus('twilio', 'offline'); showToast('Twilio: ' + (err.message || err), 'error'); });
-    device.on('incoming',        (call) => { const from = call.parameters?.From || 'Unknown'; showIncomingCall(from, null, call); });
-    device.on('tokenWillExpire', () => initTwilio());
+    Twilio.Device.ready(() => {
+      console.log('[Twilio] Device ready');
+      setStatus('twilio', 'online');
+      // Expose a compatible interface for makeCall
+      state.twilioDevice = {
+        ready: true,
+        connect: (params) => Twilio.Device.connect(params),
+        disconnect: () => Twilio.Device.disconnectAll(),
+        disconnectAll: () => Twilio.Device.disconnectAll(),
+      };
+    });
 
-    await device.register();
-    state.twilioDevice = device;
-    console.log('[Twilio] Device ready');
+    Twilio.Device.offline(() => {
+      setStatus('twilio', 'offline');
+      state.twilioDevice = null;
+      setTimeout(initTwilio, 10_000);
+    });
+
+    Twilio.Device.error((err) => {
+      console.error('[Twilio] error:', err);
+      setStatus('twilio', 'offline');
+      showToast('Twilio: ' + (err.message || err), 'error');
+    });
+
+    Twilio.Device.incoming((call) => {
+      const from = call.parameters?.From || call.parameters?.from || 'Unknown';
+      showIncomingCall(from, null, call);
+    });
+
+    Twilio.Device.cancel(() => {
+      els.incomingModal.classList.add('hidden');
+    });
+
+    Twilio.Device.disconnect(() => endCallUI());
+
+    // Refresh token before expiry (55 min)
     setTimeout(initTwilio, 55 * 60 * 1000);
+
   } catch (err) {
     console.error('[Twilio] init error:', err);
     setStatus('twilio', 'offline');
@@ -370,7 +383,7 @@ async function makeCall(to) {
   to = normalizePhone(to);
   if (!state.twilioDevice) return showToast('Twilio Voice not ready', 'error');
   try {
-    const conn = await state.twilioDevice.connect({ params: { To: to } });
+    const conn = Twilio.Device.connect({ To: to });
     state.activeCall = conn;
     startCallUI(lookupName(to) || to, to);
     setupCallEvents(conn);
@@ -407,7 +420,8 @@ function endCallUI() {
 }
 
 els.btnEndCall.addEventListener('click', () => {
-  if (state.activeCall) state.activeCall.disconnect ? state.activeCall.disconnect() : (state.twilioDevice?.disconnectAll && state.twilioDevice.disconnectAll());
+  if (state.activeCall && state.activeCall.disconnect) state.activeCall.disconnect();
+  Twilio.Device.disconnectAll();
   endCallUI();
 });
 
