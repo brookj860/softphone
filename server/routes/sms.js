@@ -4,6 +4,7 @@ const router = express.Router();
 const twilio = require('twilio');
 const { broadcast } = require('../websocket');
 const db = require('../db');
+const { archiveSMS } = require('../archive');
 
 const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 const MessagingResponse = twilio.twiml.MessagingResponse;
@@ -36,6 +37,9 @@ router.post('/', async (req, res) => {
 
   broadcast({ type: 'inbound_sms', sid: MessageSid, from: From, to: To, body: Body, profileName: name, channel: 'sms', timestamp: new Date().toISOString() });
 
+  // Archive — fire and forget, never blocks the response
+  archiveSMS({ direction: 'in', from: From, to: To, body: Body, sid: MessageSid, channel: 'sms', ts: new Date() });
+
   const twiml = new MessagingResponse();
   res.type('text/xml');
   res.send(twiml.toString());
@@ -54,6 +58,8 @@ router.post('/send', async (req, res) => {
       await db.upsertConversation(to, '', 'sms', body);
       await db.saveMessage(to, msg);
     }
+
+    archiveSMS({ direction: 'out', from: process.env.TWILIO_PHONE_NUMBER, to, body, sid: message.sid, channel: 'sms', ts: new Date() });
 
     res.json({ sid: message.sid, status: message.status });
   } catch (err) {
