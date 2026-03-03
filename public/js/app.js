@@ -1035,8 +1035,14 @@ els.addContactConfirm && els.addContactConfirm.addEventListener('click', async (
 function applyTheme(light) {
   document.documentElement.setAttribute('data-theme', light ? 'light' : 'dark');
   try { localStorage.setItem('sp-theme', light ? 'light' : 'dark'); } catch(_) {}
+  // Sync hidden checkbox in settings if present
   const toggle = $('themeToggle');
   if (toggle) toggle.checked = light;
+  // Swap sun/moon icon in nav
+  const moon = document.querySelector('.icon-moon');
+  const sun  = document.querySelector('.icon-sun');
+  if (moon) moon.classList.toggle('hidden', light);
+  if (sun)  sun.classList.toggle('hidden', !light);
 }
 
 // Apply saved theme immediately (before settings panel opens)
@@ -1181,6 +1187,56 @@ let _appBooted = false;
 window.bootApp = async function() {
   if (_appBooted) return;
   _appBooted = true;
+
+  // Nav theme button
+  const themeBtnNav = $('themeBtnNav');
+  if (themeBtnNav) {
+    themeBtnNav.addEventListener('click', () => {
+      const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+      applyTheme(!isLight);
+    });
+  }
+
+  // Nav profile button — toggle dropdown
+  const navProfileBtn = $('navProfileBtn');
+  const profileDropdown = $('profileDropdown');
+  if (navProfileBtn && profileDropdown) {
+    navProfileBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      profileDropdown.classList.toggle('hidden');
+    });
+    // Close on outside click
+    document.addEventListener('click', () => profileDropdown.classList.add('hidden'));
+  }
+
+  // Dropdown logout
+  const pdLogout = $('pdLogout');
+  pdLogout && pdLogout.addEventListener('click', async () => {
+    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+    location.href = '/login';
+  });
+
+  // Load profile into nav dropdown
+  fetch('/api/profile').then(r => r.json()).then(p => {
+    const name = p.username || 'Agent';
+    const num  = p.phoneNumber || '—';
+    window._profileName = name;
+    const av = $('navProfileAvatar');
+    if (av) {
+      av.textContent = name[0].toUpperCase();
+      av.style.background = `hsl(${name.charCodeAt(0) * 7 % 360},45%,40%)`;
+    }
+    const pdName = $('pdName'), pdNum = $('pdNumber');
+    if (pdName) pdName.textContent = name;
+    if (pdNum)  pdNum.textContent  = num;
+    // Also keep settings panel in sync
+    const profileName = $('profileName'), profileNumber = $('profileNumber');
+    if (profileName)   profileName.textContent   = name;
+    if (profileNumber) profileNumber.textContent = num;
+    const profileAvatar = $('profileAvatar');
+    if (profileAvatar) { profileAvatar.textContent = name[0].toUpperCase(); profileAvatar.style.background = `hsl(${name.charCodeAt(0) * 7 % 360},45%,40%)`; }
+  }).catch(() => {});
+
   connectWS();
   await loadHistory();
   await initTwilio();
