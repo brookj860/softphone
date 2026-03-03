@@ -68,6 +68,9 @@
     <button class="nav-btn" id="navContacts" title="Contacts">
       <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
     </button>
+    <button class="nav-btn" id="navArchive" title="Archive">
+      <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+    </button>
     <div class="nav-spacer"></div>
 
     <!-- Theme toggle — sun/moon always visible -->
@@ -267,6 +270,44 @@
           </div>
         </div>
 
+      </div>
+    </div>
+  </div>
+
+  <!-- ── ARCHIVE SCREEN ── -->
+  <div class="screen" id="archiveScreen">
+    <div class="archive-panel">
+      <div class="archive-header">
+        <h2>Archive</h2>
+        <div class="archive-tabs">
+          <button class="arch-tab active" data-arch="messages">💬 Messages</button>
+          <button class="arch-tab" data-arch="recordings">🎙 Recordings</button>
+        </div>
+        <div class="archive-search-wrap">
+          <input class="archive-search" id="archiveSearch" type="text" placeholder="Search…" autocomplete="off">
+        </div>
+      </div>
+
+      <!-- Messages view -->
+      <div class="arch-view active" id="archMessagesView">
+        <div class="arch-list" id="archMessagesList">
+          <div class="arch-empty">Loading messages…</div>
+        </div>
+        <div class="arch-pagination" id="archMsgPager"></div>
+      </div>
+
+      <!-- Recordings view -->
+      <div class="arch-view" id="archRecordingsView">
+        <!-- Inline audio player -->
+        <div class="arch-player hidden" id="archPlayer">
+          <div class="arch-player-info">
+            <span id="archPlayerLabel">—</span>
+          </div>
+          <audio id="archAudio" controls preload="none"></audio>
+        </div>
+        <div class="arch-list" id="archRecordingsList">
+          <div class="arch-empty">Loading recordings…</div>
+        </div>
       </div>
     </div>
   </div>

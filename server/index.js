@@ -130,12 +130,14 @@ function loadRoutes() {
   if (routesLoaded) return;
   routesLoaded = true;
   const voiceRouter         = require('./routes/voice');
+  const archiveApiRouter    = require('./routes/archive-api');
   const smsRouter           = require('./routes/sms');
   const contactsRouter      = require('./routes/contacts');
   const tokenRouter         = require('./routes/token');
   const conversationsRouter = require('./routes/conversations');
   app.use('/api/token',         tokenRouter);
   app.use('/api/voice',         voiceRouter);
+  app.use('/api/archive',       archiveApiRouter);
   app.use('/api/sms',           smsRouter);
   app.use('/api/contacts',      contactsRouter);
   app.use('/api/conversations', conversationsRouter);

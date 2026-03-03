@@ -151,6 +151,7 @@ $('navConv')     && $('navConv').addEventListener('click',     () => showScreen(
 $('navDial')     && $('navDial').addEventListener('click',     () => showScreen('dial'));
 $('navContacts') && $('navContacts').addEventListener('click', () => { showScreen('contacts'); loadContacts(); });
 $('navSettings') && $('navSettings').addEventListener('click', () => { showScreen('settings'); loadSettingsPanel(); });
+$('navArchive')  && $('navArchive').addEventListener('click',  () => { showScreen('archive');  loadArchive(); });
 els.backBtn && els.backBtn.addEventListener('click', goBack);
 
 /* ============================================================
@@ -1178,6 +1179,205 @@ async function checkFeatures() {
       if (els.sWA) els.sWA.textContent = '⚫ Not configured';
     }
   } catch(e) {}
+}
+
+
+/* ============================================================
+   ARCHIVE
+============================================================ */
+const archState = {
+  tab:      'messages',
+  msgPage:  0,
+  msgTotal: 0,
+  query:    '',
+  channel:  '',
+  playingSid: null,
+};
+const PAGE_SIZE = 50;
+
+async function loadArchive() {
+  // Tab switchers
+  document.querySelectorAll('.arch-tab').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('.arch-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      archState.tab = btn.dataset.arch;
+      document.querySelectorAll('.arch-view').forEach(v => v.classList.remove('active'));
+      $('arch' + btn.dataset.arch.charAt(0).toUpperCase() + btn.dataset.arch.slice(1) + 'View')?.classList.add('active');
+      if (archState.tab === 'messages')   fetchArchiveMessages(0);
+      if (archState.tab === 'recordings') fetchArchiveRecordings();
+    };
+  });
+
+  // Search
+  const searchEl = $('archiveSearch');
+  if (searchEl) {
+    searchEl.oninput = debounce(() => {
+      archState.query = searchEl.value;
+      if (archState.tab === 'messages')   fetchArchiveMessages(0);
+      if (archState.tab === 'recordings') fetchArchiveRecordings();
+    }, 350);
+  }
+
+  // Initial load
+  fetchArchiveMessages(0);
+}
+
+function debounce(fn, ms) {
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+
+// ── Messages ────────────────────────────────────────────────
+async function fetchArchiveMessages(page = 0) {
+  const list = $('archMessagesList');
+  if (!list) return;
+  list.innerHTML = '<div class="arch-empty">Loading…</div>';
+  archState.msgPage = page;
+
+  const params = new URLSearchParams({
+    limit:  PAGE_SIZE,
+    offset: page * PAGE_SIZE,
+    q:      archState.query,
+  });
+  if (archState.channel) params.set('channel', archState.channel);
+
+  try {
+    const res = await fetch('/api/archive/messages?' + params);
+    const { messages, total } = await res.json();
+    archState.msgTotal = total;
+
+    if (!messages.length) {
+      list.innerHTML = '<div class="arch-empty">No messages found.</div>';
+      $('archMsgPager').innerHTML = '';
+      return;
+    }
+
+    list.innerHTML = '';
+    messages.forEach(m => {
+      const name = m.contact_name || m.phone;
+      const ts   = new Date(m.ts);
+      const row  = document.createElement('div');
+      row.className = 'arch-msg-row';
+      row.innerHTML = `
+        <div class="arch-msg-top">
+          <span class="arch-msg-dir arch-dir-${m.direction}">${m.direction === 'in' ? 'IN' : 'OUT'}</span>
+          <span class="arch-msg-contact">${escHtml(name)}</span>
+          <span class="arch-msg-ch tag-${m.channel}">${m.channel === 'whatsapp' ? 'WA' : 'SMS'}</span>
+          <span class="arch-msg-time">${ts.toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'})} ${ts.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span>
+        </div>
+        <div class="arch-msg-body">${escHtml(m.body)}</div>
+      `;
+      list.appendChild(row);
+    });
+
+    // Pagination
+    renderMsgPager(page, total);
+  } catch (e) {
+    list.innerHTML = '<div class="arch-empty">Failed to load messages.</div>';
+  }
+}
+
+function renderMsgPager(page, total) {
+  const pager = $('archMsgPager');
+  if (!pager) return;
+  const pages = Math.ceil(total / PAGE_SIZE);
+  if (pages <= 1) { pager.innerHTML = ''; return; }
+
+  pager.innerHTML = '';
+  const info = document.createElement('span');
+  info.className = 'arch-page-info';
+  info.textContent = `${page * PAGE_SIZE + 1}–${Math.min((page + 1) * PAGE_SIZE, total)} of ${total}`;
+  pager.appendChild(info);
+
+  if (page > 0) {
+    const prev = document.createElement('button');
+    prev.className = 'arch-page-btn';
+    prev.textContent = '← Prev';
+    prev.onclick = () => fetchArchiveMessages(page - 1);
+    pager.appendChild(prev);
+  }
+  if (page < pages - 1) {
+    const next = document.createElement('button');
+    next.className = 'arch-page-btn';
+    next.textContent = 'Next →';
+    next.onclick = () => fetchArchiveMessages(page + 1);
+    pager.appendChild(next);
+  }
+}
+
+// ── Recordings ──────────────────────────────────────────────
+async function fetchArchiveRecordings() {
+  const list = $('archRecordingsList');
+  if (!list) return;
+  list.innerHTML = '<div class="arch-empty">Loading…</div>';
+
+  try {
+    const res = await fetch('/api/archive/recordings?limit=100');
+    const { recordings } = await res.json();
+
+    if (!recordings.length) {
+      list.innerHTML = '<div class="arch-empty">No recordings found.<br><small>Recordings appear here after calls end.</small></div>';
+      return;
+    }
+
+    // Filter by search query client-side (Twilio doesn't support full text search)
+    const q = archState.query.toLowerCase();
+    const filtered = q
+      ? recordings.filter(r => r.from.includes(q) || r.to.includes(q))
+      : recordings;
+
+    list.innerHTML = '';
+    filtered.forEach(r => {
+      const ts  = new Date(r.startTime);
+      const dur = fmtDur(r.duration);
+      const row = document.createElement('div');
+      row.className = 'arch-rec-row';
+      row.dataset.sid = r.sid;
+      row.innerHTML = `
+        <div class="arch-rec-icon">▶</div>
+        <div class="arch-rec-info">
+          <div class="arch-rec-parties">${escHtml(r.from)} → ${escHtml(r.to)}</div>
+          <div class="arch-rec-meta">${ts.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})} ${ts.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} · SID: ${r.sid.slice(0,16)}…</div>
+        </div>
+        <div class="arch-rec-dur">${dur}</div>
+      `;
+      row.onclick = () => playRecording(r, row);
+      list.appendChild(row);
+    });
+  } catch (e) {
+    list.innerHTML = `<div class="arch-empty">Failed to load recordings.<br><small>${e.message}</small></div>`;
+  }
+}
+
+function playRecording(r, rowEl) {
+  const player  = $('archPlayer');
+  const audio   = $('archAudio');
+  const label   = $('archPlayerLabel');
+  if (!player || !audio) return;
+
+  // Deselect previous
+  document.querySelectorAll('.arch-rec-row').forEach(r => r.classList.remove('playing'));
+  rowEl.classList.add('playing');
+
+  const ts = new Date(r.startTime);
+  label.textContent = `${r.from} → ${r.to}  ·  ${ts.toLocaleDateString('en-GB')}  ·  ${fmtDur(r.duration)}`;
+
+  audio.src = r.audioUrl;
+  player.classList.remove('hidden');
+  audio.play().catch(() => {}); // autoplay may require user gesture — fine
+}
+
+function fmtDur(s) {
+  s = parseInt(s || 0);
+  const m = Math.floor(s / 60), sec = s % 60;
+  return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
+}
+
+function escHtml(s) {
+  return String(s || '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 /* ============================================================
