@@ -86,23 +86,62 @@ router.get('/conversations/:phone/messages', async (req, res) => {
 
 /**
  * GET /api/archive/recordings
- * List of call recordings from Twilio with metadata.
+ * List of call recordings enriched with call from/to and contact names.
  */
 router.get('/recordings', async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit || '50'), 100);
     const recs  = await client.recordings.list({ limit });
 
-    const out = recs.map(r => ({
-      sid:       r.sid,
-      callSid:   r.callSid,
-      from:      r.from || '—',
-      to:        r.to   || '—',
-      duration:  parseInt(r.duration || 0),
-      startTime: r.startTime,
-      status:    r.status,
-      // We proxy the audio through our server to avoid CORS/auth issues
-      audioUrl:  `/api/archive/recordings/${r.sid}/audio`,
+    // Load contacts from DB for name resolution
+    const contacts = await db.getContacts().catch(() => []);
+    const contactMap = {};
+    contacts.forEach(c => { contactMap[c.phone] = c.name; });
+
+    // For each recording, fetch its parent call to get from/to numbers
+    const out = await Promise.all(recs.map(async r => {
+      let from = '', to = '', direction = 'outbound';
+      try {
+        const call = await client.calls(r.callSid).fetch();
+        from      = call.from || '';
+        to        = call.to   || '';
+        direction = call.direction || 'outbound';
+      } catch (_) {
+        // Call may have been deleted — use what we have
+      }
+
+      // Resolve names — strip 'client:' prefix for browser SDK legs
+      const cleanFrom = from.replace(/^client:/, '');
+      const cleanTo   = to.replace(/^client:/, '');
+      const fromName  = contactMap[cleanFrom] || contactMap[from] || null;
+      const toName    = contactMap[cleanTo]   || contactMap[to]   || null;
+
+      // Build a human-readable label
+      // direction: inbound = someone called us, outbound = we called them
+      const myNumber  = process.env.TWILIO_PHONE_NUMBER || '';
+      let label;
+      if (direction === 'inbound') {
+        const caller = fromName || cleanFrom || from || 'Unknown';
+        label = `📞 Incoming from ${caller}`;
+      } else {
+        const callee = toName || cleanTo || to || 'Unknown';
+        label = `📲 Outgoing to ${callee}`;
+      }
+
+      return {
+        sid:       r.sid,
+        callSid:   r.callSid,
+        from:      cleanFrom || from || '—',
+        to:        cleanTo   || to   || '—',
+        fromName:  fromName  || cleanFrom || from || '—',
+        toName:    toName    || cleanTo   || to   || '—',
+        label,
+        direction,
+        duration:  parseInt(r.duration || 0),
+        startTime: r.startTime,
+        status:    r.status,
+        audioUrl:  `/api/archive/recordings/${r.sid}/audio`,
+      };
     }));
 
     res.json({ recordings: out, total: out.length });

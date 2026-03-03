@@ -1409,11 +1409,19 @@ async function fetchArchiveRecordings() {
       const row = document.createElement('div');
       row.className = 'arch-rec-row';
       row.dataset.sid = r.sid;
+      const dirIcon = r.direction === 'inbound' ? '↙' : '↗';
+      const dirColor = r.direction === 'inbound' ? 'var(--sms)' : '#8888cc';
       row.innerHTML = `
-        <div class="arch-rec-icon">▶</div>
+        <div class="arch-rec-icon" style="color:${dirColor}">${dirIcon}</div>
         <div class="arch-rec-info">
-          <div class="arch-rec-parties">${escHtml(r.from)} → ${escHtml(r.to)}</div>
-          <div class="arch-rec-meta">${ts.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})} ${ts.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} · SID: ${r.sid.slice(0,16)}…</div>
+          <div class="arch-rec-parties">${escHtml(r.label || r.fromName + ' → ' + r.toName)}</div>
+          <div class="arch-rec-meta">
+            ${ts.toLocaleDateString('en-GB',{weekday:'short',day:'2-digit',month:'short',year:'numeric'})}
+            &nbsp;·&nbsp;
+            ${ts.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}
+            &nbsp;·&nbsp;
+            <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim)">${r.from} → ${r.to}</span>
+          </div>
         </div>
         <div class="arch-rec-dur">${dur}</div>
       `;
@@ -1436,7 +1444,7 @@ function playRecording(r, rowEl) {
   rowEl.classList.add('playing');
 
   const ts = new Date(r.startTime);
-  label.textContent = `${r.from} → ${r.to}  ·  ${ts.toLocaleDateString('en-GB')}  ·  ${fmtDur(r.duration)}`;
+  label.textContent = `${r.label || r.fromName + ' → ' + r.toName}  ·  ${ts.toLocaleDateString('en-GB', {weekday:'short',day:'2-digit',month:'short',year:'numeric'})}  ·  ${fmtDur(r.duration)}`;
 
   audio.src = r.audioUrl;
   player.classList.remove('hidden');
