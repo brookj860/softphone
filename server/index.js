@@ -72,10 +72,25 @@ app.get('/api/features', (req, res) => {
 if (isConfigured()) {
   const voiceRouter = require('./routes/voice');
   const smsRouter   = require('./routes/sms');
-  app.use('/webhook/twilio/voice', voiceRouter);
-  app.use('/webhook/twilio/sms',   smsRouter);
-  app.use('/api/voice/outbound',   voiceRouter); // TwiML App URL — must be public
-  app.use('/api/voice/status',     voiceRouter); // Status callback — must be public
+
+  // Inbound call from Twilio to your phone number
+  app.post('/webhook/twilio/voice', (req, res, next) => {
+    req.url = '/'; voiceRouter(req, res, next);
+  });
+
+  // Outbound call from browser SDK — TwiML App must point here
+  app.post('/api/voice/outbound', (req, res, next) => {
+    req.url = '/outbound'; voiceRouter(req, res, next);
+  });
+
+  // Call status callbacks
+  app.post('/api/voice/status', (req, res, next) => {
+    req.url = '/status'; voiceRouter(req, res, next);
+  });
+
+  // Inbound SMS
+  app.use('/webhook/twilio/sms', smsRouter);
+
   if (hasWhatsApp()) {
     const waRouter = require('./routes/whatsapp');
     app.use('/webhook/whatsapp', waRouter);
