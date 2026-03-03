@@ -4,6 +4,8 @@ require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const path = require('path');
+const multer = require('multer');
+const uploadMem = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
 const cors = require('cors');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
