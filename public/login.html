@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Softphone — Login</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a0a0f; --surface: #12121a; --border: #2a2a3f;
+      --accent: #f22f46; --text: #e8e8f0; --text-dim: #6b6b8a;
+      --mono: 'IBM Plex Mono', monospace; --sans: 'IBM Plex Sans', sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%; background: var(--bg); color: var(--text);
+      font-family: var(--sans); display: flex;
+      align-items: center; justify-content: center;
+    }
+    .card {
+      width: 100%; max-width: 360px; padding: 36px 28px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; margin: 20px;
+    }
+    .logo {
+      width: 48px; height: 48px; background: var(--accent);
+      border-radius: 12px; display: flex; align-items: center;
+      justify-content: center; font-family: var(--mono);
+      font-weight: 700; font-size: 16px; color: #fff; margin-bottom: 20px;
+    }
+    h1 { font-size: 22px; font-weight: 600; margin-bottom: 6px; }
+    p  { font-size: 13px; color: var(--text-dim); margin-bottom: 24px; }
+
+    .field { margin-bottom: 14px; }
+    label  { display: block; font-size: 11px; font-family: var(--mono); color: var(--text-dim); margin-bottom: 5px; }
+    input  {
+      width: 100%; background: #1a1a26; border: 1px solid var(--border);
+      border-radius: 10px; padding: 12px 14px; color: var(--text);
+      font-family: var(--sans); font-size: 16px; outline: none;
+      -webkit-appearance: none;
+    }
+    input:focus { border-color: #4a4a6f; }
+
+    .btn {
+      width: 100%; padding: 13px; border-radius: 10px; border: none;
+      background: var(--accent); color: #fff; font-family: var(--sans);
+      font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 8px;
+    }
+    .btn:disabled { opacity: .6; cursor: not-allowed; }
+
+    .error {
+      margin-top: 12px; padding: 10px 14px;
+      background: rgba(242,47,70,.1); border: 1px solid rgba(242,47,70,.3);
+      border-radius: 8px; font-size: 13px; color: var(--accent);
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">SP</div>
+    <h1>Sign in</h1>
+    <p>Enter your credentials to access Softphone.</p>
+
+    <div class="field">
+      <label>Username</label>
+      <input type="text" id="username" placeholder="admin" autocomplete="username">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="password" placeholder="••••••••" autocomplete="current-password">
+    </div>
+
+    <button class="btn" id="loginBtn">Sign in</button>
+    <div class="error" id="errorMsg">Invalid username or password</div>
+  </div>
+
+  <script>
+    const btn = document.getElementById('loginBtn');
+    const err = document.getElementById('errorMsg');
+
+    async function login() {
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+      if (!username || !password) { err.style.display = 'block'; err.textContent = 'Please enter username and password'; return; }
+
+      btn.disabled = true;
+      btn.textContent = 'Signing in…';
+      err.style.display = 'none';
+
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
+        });
+        const data = await res.json();
+        if (res.ok && data.ok) {
+          location.href = '/';
+        } else {
+          err.textContent = data.error || 'Invalid username or password';
+          err.style.display = 'block';
+          btn.disabled = false;
+          btn.textContent = 'Sign in';
+        }
+      } catch(e) {
+        err.textContent = 'Connection error — try again';
+        err.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Sign in';
+      }
+    }
+
+    btn.addEventListener('click', login);
+    document.addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+  </script>
+</body>
+</html>

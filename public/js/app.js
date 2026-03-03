@@ -258,26 +258,31 @@ async function initTwilio() {
   try {
     setStatus('twilio', 'connecting');
     const res = await fetch('/api/token?identity=softphone-agent');
-    if (!res.ok) throw new Error('Token fetch failed');
+    if (!res.ok) throw new Error('Token fetch failed — check Twilio API Key in Railway vars');
     const { token } = await res.json();
 
-    const Device = Twilio.Device;
-    const device = new Device(token, { logLevel: 1 });
+    // Destroy old device if re-initialising
+    if (state.twilioDevice && state.twilioDevice.destroy) {
+      try { state.twilioDevice.destroy(); } catch(_) {}
+    }
 
-    device.on('registered', () => { setStatus('twilio', 'online'); });
-    device.on('ready',      () => { setStatus('twilio', 'online'); });
-    device.on('error',      (err) => { setStatus('twilio', 'offline'); showToast('Twilio: ' + err.message, 'error'); });
-    device.on('incoming',   (call) => { const from = call.parameters?.From || 'Unknown'; showIncomingCall(from, null, call); });
-    device.on('disconnect', () => endCallUI());
-    device.on('offline',    () => setStatus('twilio', 'offline'));
-    device.on('cancel',     () => els.incomingModal.classList.add('hidden'));
+    const device = new Twilio.Device(token, {
+      logLevel: 'warn',
+      codecPreferences: ['pcmu', 'opus'],
+    });
+
+    device.on('registered',      () => { console.log('[Twilio] registered'); setStatus('twilio', 'online'); });
+    device.on('unregistered',    () => setStatus('twilio', 'offline'));
+    device.on('error',           (err) => { console.error('[Twilio]', err); setStatus('twilio', 'offline'); showToast('Twilio: ' + (err.message || err), 'error'); });
+    device.on('incoming',        (call) => { const from = call.parameters?.From || 'Unknown'; showIncomingCall(from, null, call); });
     device.on('tokenWillExpire', () => initTwilio());
 
-    try { await device.register(); } catch (_) {}
-
+    await device.register();
     state.twilioDevice = device;
+    console.log('[Twilio] Device ready');
     setTimeout(initTwilio, 55 * 60 * 1000);
   } catch (err) {
+    console.error('[Twilio] init error:', err);
     setStatus('twilio', 'offline');
     showToast('Twilio: ' + err.message, 'error');
     setTimeout(initTwilio, 10_000);

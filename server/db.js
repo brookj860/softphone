@@ -5,10 +5,10 @@ let pool = null;
 
 function getPool() {
   if (!pool) {
-    // Railway automatically sets DATABASE_URL when you add a Postgres service
+    const connStr = process.env.DATABASE_URL || process.env.DATABASE_PRIVATE_URL || process.env.DATABASE_PUBLIC_URL;
     pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: process.env.DATABASE_URL?.includes('railway') ? { rejectUnauthorized: false } : false,
+      connectionString: connStr,
+      ssl: connStr?.includes('railway') || connStr?.includes('postgres') ? { rejectUnauthorized: false } : false,
     });
     pool.on('error', (err) => console.error('[DB] Unexpected error:', err.message));
   }
@@ -17,7 +17,8 @@ function getPool() {
 
 // ── Create tables if they don't exist ─────────────────────
 async function init() {
-  if (!process.env.DATABASE_URL) {
+  const connStr = process.env.DATABASE_URL || process.env.DATABASE_PRIVATE_URL || process.env.DATABASE_PUBLIC_URL;
+  if (!connStr) {
     console.log('[DB] No DATABASE_URL — history will not persist');
     return false;
   }
@@ -190,7 +191,7 @@ async function lookupContact(phone) {
 
 module.exports = {
   init,
-  isAvailable: () => !!process.env.DATABASE_URL,
+  isAvailable: () => !!(process.env.DATABASE_URL || process.env.DATABASE_PRIVATE_URL || process.env.DATABASE_PUBLIC_URL),
   getConversations,
   upsertConversation,
   incrementUnread,
