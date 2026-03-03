@@ -88,6 +88,11 @@ if (isConfigured()) {
     req.url = '/status'; voiceRouter(req, res, next);
   });
 
+  // Recording ready callback — must be public, Twilio POSTs here with no cookie
+  app.post('/api/voice/recording', (req, res, next) => {
+    req.url = '/recording'; voiceRouter(req, res, next);
+  });
+
   // Inbound SMS
   app.use('/webhook/twilio/sms', smsRouter);
 
