@@ -67,6 +67,7 @@ app.get('/api/features', (req, res) => {
   });
 });
 
+app.set('trust proxy', 1);
 const limiter = rateLimit({ windowMs: 60_000, max: 200, standardHeaders: true, legacyHeaders: false });
 app.use('/api/', limiter);
 

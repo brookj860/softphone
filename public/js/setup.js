@@ -1,54 +1,22 @@
-/* ============================================================
-   SETUP WIZARD
-   Handles first-run configuration and settings screen.
-   ============================================================ */
 'use strict';
 
-// Fields split by page
-const SETUP_PAGES = {
-  1: [
-    { key: 'PUBLIC_URL',            label: 'Your App URL',          hint: 'e.g. https://myapp.up.railway.app — no trailing slash', type: 'text',      required: true  },
-    { key: 'TWILIO_ACCOUNT_SID',    label: 'Twilio Account SID',    hint: 'Starts with AC…',                                       type: 'text',     required: true  },
-    { key: 'TWILIO_AUTH_TOKEN',     label: 'Twilio Auth Token',     hint: 'From Twilio console dashboard',                         type: 'text', required: true  },
-    { key: 'TWILIO_PHONE_NUMBER',   label: 'Twilio Phone Number',   hint: 'E.164 format e.g. +441234567890',                       type: 'text',      required: true  },
-    { key: 'TWILIO_TWIML_APP_SID', label: 'TwiML App SID',        hint: 'Starts with AP… (create in Voice → TwiML Apps)',         type: 'text',     required: true  },
-    { key: 'TWILIO_API_KEY',       label: 'Twilio API Key SID',    hint: 'Starts with SK…',                                       type: 'text',     required: true  },
-    { key: 'TWILIO_API_SECRET',    label: 'Twilio API Secret',     hint: 'Shown once when you create the API key',                type: 'text', required: true  },
-  ],
-  2: [
-    { key: 'WA_PHONE_NUMBER_ID',       label: 'WhatsApp Phone Number ID',      hint: '15-16 digit ID from Meta API Setup page (not the phone number)', type: 'text',     required: true  },
-    { key: 'WA_PERMANENT_TOKEN',       label: 'WhatsApp Permanent Token',      hint: 'Starts with EAA… from Business Settings → System Users',         type: 'text', required: true  },
-    { key: 'WA_BUSINESS_ACCOUNT_ID',  label: 'WhatsApp Business Account ID',  hint: '15-16 digit ID — optional but recommended',                       type: 'text',     required: false },
-    { key: 'WA_WEBHOOK_VERIFY_TOKEN', label: 'Webhook Verify Token',           hint: 'Make up any string — you\'ll paste this same value in Meta too', type: 'text',     required: true  },
-  ],
-};
-
-let configValues = {};
-let isEphemeral = false;
-
-// ── Boot: check if configured ──────────────────────────────
+// ── On load: check if server is configured, skip wizard if so ──
 async function checkSetupNeeded() {
   try {
-    const res = await fetch('/api/config');
-    const data = await res.json();
-    configValues = data.values || {};
+    const res = await fetch('/api/features');
+    const features = await res.json();
 
-    if (data.isConfigured && location.hash !== '#setup') {
+    if (features.configured) {
+      // All good — go straight to the app
       showApp();
     } else {
-      showSetup(data);
+      // Not configured — show a simple message (Railway vars needed)
+      showNotConfigured();
     }
   } catch (e) {
-    // Server not ready yet — retry
+    // Retry if server not ready yet
     setTimeout(checkSetupNeeded, 1500);
   }
-}
-
-function showSetup(data) {
-  document.getElementById('setupOverlay').classList.remove('hidden');
-  document.getElementById('appRoot').classList.add('hidden');
-  renderSetupFields(1, data?.values || {});
-  renderSetupFields(2, data?.values || {});
 }
 
 function showApp() {
@@ -57,206 +25,78 @@ function showApp() {
   if (typeof window.bootApp === 'function') window.bootApp();
 }
 
-// ── Render setup form fields ───────────────────────────────
-function renderSetupFields(page, values) {
-  const container = document.getElementById(`setupFields${page}`);
+function showNotConfigured() {
+  document.getElementById('setupOverlay').classList.remove('hidden');
+  document.getElementById('appRoot').classList.add('hidden');
+
+  // Replace wizard content with a simple message
+  const container = document.querySelector('.setup-container');
+  if (container) {
+    container.innerHTML = `
+      <div class="setup-logo">SP</div>
+      <h1 class="setup-title">Almost there!</h1>
+      <p class="setup-sub">Your app is deployed but needs API credentials. Add these as Environment Variables in your Railway project dashboard:</p>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:16px;margin:20px 0;font-family:var(--mono);font-size:12px;line-height:2.2">
+        PUBLIC_URL<br>
+        TWILIO_ACCOUNT_SID<br>
+        TWILIO_AUTH_TOKEN<br>
+        TWILIO_PHONE_NUMBER<br>
+        TWILIO_TWIML_APP_SID<br>
+        TWILIO_API_KEY<br>
+        TWILIO_API_SECRET<br>
+        <span style="color:var(--text-dim)">WA_PHONE_NUMBER_ID (optional)<br>
+        WA_PERMANENT_TOKEN (optional)<br>
+        WA_WEBHOOK_VERIFY_TOKEN (optional)</span>
+      </div>
+      <p style="font-size:12px;color:var(--text-dim)">After adding variables in Railway, click <b>Deploy</b> to restart, then refresh this page.</p>
+      <button class="setup-btn" onclick="location.reload()" style="margin-top:8px">↻ Refresh</button>
+    `;
+  }
+}
+
+// Expose for settings panel
+window.loadSettingsPanel = async function() {
+  const container = document.getElementById('settingsFields');
+  const webhooks  = document.getElementById('settingsWebhooks');
   if (!container) return;
-  container.innerHTML = '';
-
-  SETUP_PAGES[page].forEach(f => {
-    const val = values[f.key] || '';
-    const div = document.createElement('div');
-    div.className = 'setup-field';
-    div.innerHTML = `
-      <label class="setup-label">${f.label}${f.required ? ' <span class="req">*</span>' : ''}</label>
-      <input class="setup-input" type="${f.type}" id="sf_${f.key}"
-        placeholder="${f.hint}"
-        value="${val.startsWith('••••') ? '' : escHtml(val)}"
-        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
-      <div class="setup-hint">${f.hint}</div>
-    `;
-    container.appendChild(div);
-  });
-}
-
-// ── Step navigation ────────────────────────────────────────
-function setupNext(fromPage) {
-  console.log("[Setup] Next clicked, page", fromPage);
-  const errors = validatePage(fromPage);
-  if (errors.length) {
-    showSetupError(errors[0]);
-    return;
-  }
-  collectPage(fromPage);
-  showSetupError('');
-  gotoStep(fromPage + 1);
-}
-
-function setupPrev(fromPage) {
-  gotoStep(fromPage - 1);
-}
-
-function gotoStep(step) {
-  document.querySelectorAll('.setup-page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.step').forEach(s => {
-    s.classList.toggle('active', parseInt(s.dataset.step) === step);
-    s.classList.toggle('done', parseInt(s.dataset.step) < step);
-  });
-  document.getElementById(`setupPage${step}`)?.classList.add('active');
-}
-
-function validatePage(page) {
-  const errors = [];
-  SETUP_PAGES[page].forEach(f => {
-    if (f.required) {
-      const el = document.getElementById(`sf_${f.key}`);
-      if (!el || !el.value.trim()) errors.push(`${f.label} is required`);
-    }
-  });
-  return errors;
-}
-
-function collectPage(page) {
-  SETUP_PAGES[page].forEach(f => {
-    const el = document.getElementById(`sf_${f.key}`);
-    if (el && el.value.trim()) configValues[f.key] = el.value.trim();
-  });
-}
-
-// ── Save config ────────────────────────────────────────────
-async function setupSave() {
-  const errors = validatePage(2);
-  if (errors.length) { showSetupError(errors[0]); return; }
-  collectPage(2);
-  showSetupError('');
-
-  document.getElementById('setupSaving').classList.remove('hidden');
 
   try {
-    const res = await fetch('/api/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(configValues),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Save failed');
-
-    isEphemeral = data.ephemeral;
-    document.getElementById('setupSaving').classList.add('hidden');
-
-    // Show webhook URLs
-    const publicUrl = configValues['PUBLIC_URL'];
-    document.getElementById('webhookList').innerHTML = `
-      <div class="webhook-item"><span>Twilio Voice:</span><code>${publicUrl}/webhook/twilio/voice</code></div>
-      <div class="webhook-item"><span>Twilio SMS:</span><code>${publicUrl}/webhook/twilio/sms</code></div>
-      <div class="webhook-item"><span>WhatsApp:</span><code>${publicUrl}/webhook/whatsapp</code></div>
+    const res = await fetch('/api/features');
+    const f = await res.json();
+    container.innerHTML = `
+      <p style="font-size:12px;color:var(--text-dim);line-height:1.8">
+        Settings are managed via <b>Railway → Variables</b>.<br>
+        Changes there take effect after a redeploy.
+      </p>
+      <div style="margin-top:12px;font-size:12px;line-height:2">
+        <span style="color:${f.voice ? 'var(--green)' : 'var(--red)'}">● Voice calls: ${f.voice ? 'enabled' : 'not configured'}</span><br>
+        <span style="color:${f.sms ? 'var(--green)' : 'var(--red)'}">● SMS: ${f.sms ? 'enabled' : 'not configured'}</span><br>
+        <span style="color:${f.whatsapp ? 'var(--green)' : 'var(--text-dim)'}">● WhatsApp: ${f.whatsapp ? 'enabled' : 'not configured (optional)'}</span>
+      </div>
     `;
-
-    if (isEphemeral) {
-      document.getElementById('ephemeralNote').style.display = 'block';
-    }
-
-    gotoStep(3);
-  } catch (err) {
-    document.getElementById('setupSaving').classList.add('hidden');
-    showSetupError(`Error: ${err.message}`);
-  }
-}
-
-function launchApp() {
-  location.hash = '';
-  showApp();
-}
-
-function showSetupError(msg) {
-  console.log("[Setup] Error:", msg);
-  const el = document.getElementById('setupError');
-  if (!msg) { el.classList.add('hidden'); return; }
-  el.textContent = msg;
-  el.classList.remove('hidden');
-}
-
-// ── Settings panel (in-app config editing) ─────────────────
-async function loadSettingsPanel() {
-  try {
-    const res = await fetch('/api/config');
-    const data = await res.json();
-    const values = data.values || {};
-
-    const allFields = [...SETUP_PAGES[1], ...SETUP_PAGES[2]];
-    const container = document.getElementById('settingsFields');
-    if (!container) return;
-    container.innerHTML = '';
-
-    allFields.forEach(f => {
-      const val = values[f.key] || '';
-      const div = document.createElement('div');
-      div.className = 'setup-field';
-      div.innerHTML = `
-        <label class="setup-label">${f.label}</label>
-        <input class="setup-input" type="${f.type}" id="set_${f.key}"
-          value="${val.startsWith('••••') ? '' : escHtml(val)}"
-          placeholder="${f.hint}"
-          autocomplete="off">
+    if (webhooks && f.configured) {
+      const base = location.origin;
+      webhooks.innerHTML = `
+        <div><b>Twilio Voice:</b><br>${base}/webhook/twilio/voice</div><br>
+        <div><b>Twilio SMS:</b><br>${base}/webhook/twilio/sms</div><br>
+        ${f.whatsapp ? `<div><b>WhatsApp:</b><br>${base}/webhook/whatsapp</div>` : ''}
       `;
-      container.appendChild(div);
-    });
-
-    if (data.webhooks) {
-      const wh = document.getElementById('settingsWebhooks');
-      if (wh) wh.innerHTML = Object.entries(data.webhooks).map(([k,v]) =>
-        `<div><b>${k}:</b><br><span style="word-break:break-all">${v}</span></div>`
-      ).join('');
     }
-  } catch (e) { console.error(e); }
+  } catch(e) { container.innerHTML = '<p style="color:var(--text-dim);font-size:12px">Could not load status.</p>'; }
+};
+
+window.saveSettings = function() {
+  if (typeof showToast === 'function') showToast('Edit variables in Railway dashboard, then redeploy', 'info');
+};
+
+// Register service worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
 }
 
-async function saveSettings() {
-  const allFields = [...SETUP_PAGES[1], ...SETUP_PAGES[2]];
-  const updates = {};
-  allFields.forEach(f => {
-    const el = document.getElementById(`set_${f.key}`);
-    if (el && el.value.trim()) updates[f.key] = el.value.trim();
-  });
-
-  try {
-    const res = await fetch('/api/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
-    if (typeof showToast === 'function') {
-      showToast(data.ephemeral
-        ? 'Saved for this session. Set env vars in Railway for persistence.'
-        : 'Settings saved ✓', data.ephemeral ? 'info' : 'success');
-    }
-  } catch (err) {
-    if (typeof showToast === 'function') showToast(`Save failed: ${err.message}`, 'error');
-  }
-}
-
-// ── Expose globals ─────────────────────────────────────────
-window.setupNext   = setupNext;
-window.setupPrev   = setupPrev;
-window.setupSave   = setupSave;
-window.launchApp   = launchApp;
-window.saveSettings = saveSettings;
-window.loadSettingsPanel = loadSettingsPanel;
-
-function escHtml(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-// ── Start ──────────────────────────────────────────────────
+// Boot
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', checkSetupNeeded);
 } else {
   checkSetupNeeded();
-}
-
-// Register service worker
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').catch(e => console.log('SW:', e));
 }
