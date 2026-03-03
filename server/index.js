@@ -30,9 +30,9 @@ app.use((req, res, next) => {
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Content-Security-Policy', [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' https://sdk.twilio.com https://media.twiliocdn.com",
+    "script-src 'self' 'unsafe-inline' https://media.twiliocdn.com",
     "script-src-attr 'unsafe-inline'",
-    "connect-src 'self' wss: ws: https://sdk.twilio.com https://media.twiliocdn.com https://eventgw.twilio.com https://chunderw-vpc-gll.twilio.com https://graph.facebook.com",
+    "connect-src 'self' wss: ws: https://media.twiliocdn.com https://eventgw.twilio.com wss://voice-js.roaming.twilio.com https://sdk.twilio.com https://graph.facebook.com",
     "media-src 'self' blob: https://media.twiliocdn.com",
     "worker-src 'self' blob:",
     "img-src 'self' data: blob:",
@@ -135,6 +135,14 @@ if (isConfigured()) loadRoutes();
 
 // Login page
 app.get('/login', (req, res) => res.sendFile(path.join(__dirname, '../public/login.html')));
+
+// Serve Twilio Voice SDK from npm package (v2.x no longer on CDN)
+app.get('/js/twilio.min.js', (req, res) => {
+  const sdkPath = require.resolve('@twilio/voice-sdk/dist/twilio.min.js');
+  res.setHeader('Content-Type', 'application/javascript');
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.sendFile(sdkPath);
+});
 
 // Static files
 app.use(express.static(path.join(__dirname, '../public'), {
