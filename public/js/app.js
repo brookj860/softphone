@@ -269,7 +269,7 @@ els.btnDialCall.addEventListener('click', () => {
   makeCall(to);
 });
 
-function makeCall(to) {
+async function makeCall(to) {
   if (!state.twilioDevice) return showToast('Twilio Voice not ready', 'error');
   try {
     const conn = await state.twilioDevice.connect({ params: { To: to } });
