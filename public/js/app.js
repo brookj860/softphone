@@ -339,10 +339,7 @@ els.btnMute.addEventListener('click', () => {
   els.btnMute.textContent = muted ? '🔇' : '🎤';
 });
 
-// btnHold removed
-if (false) ({
-  showToast('Hold requires server-side Twilio REST call — see docs', 'info');
-});
+// Hold not implemented
 
 els.btnEndCall.addEventListener('click', () => {
   if (state.activeCall) state.activeCall.disconnect();
