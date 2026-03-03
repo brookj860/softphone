@@ -7,63 +7,55 @@ const { broadcast } = require('../websocket');
 const VoiceResponse = twilio.twiml.VoiceResponse;
 const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 
-// ── Validate Twilio request signature ─────────────────────
-function validateTwilio(req, res, next) {
-  // Signature validation skipped - breaks behind Railway proxy
-  next();
-}
-
 /**
- * POST /webhook/twilio/voice
- * Twilio calls this URL for ALL inbound calls.
- * We use <Dial><Client> to ring the browser.
+ * POST /webhook/twilio/voice  (set this in Twilio phone number config)
+ * Handles INBOUND calls to your Twilio number — rings the browser.
  */
-router.post('/', validateTwilio, (req, res) => {
+router.post('/', (req, res) => {
   const twiml = new VoiceResponse();
   const from = req.body.From || 'Unknown';
   const callSid = req.body.CallSid;
-  const direction = req.body.Direction;
 
   console.log(`[Voice] Inbound call from ${from} — SID: ${callSid}`);
 
-  // Notify all browser clients of incoming call
   broadcast({
     type: 'inbound_call',
     from,
     callSid,
-    direction,
     timestamp: new Date().toISOString(),
   });
 
-  // Ring the browser client — identity matches what /api/token returns
-  const dial = twiml.dial({ timeout: 30, record: 'do-not-record' });
-  dial.client('softphone-agent'); // matches identity in token
+  // Ring the browser client
+  const dial = twiml.dial({ timeout: 30 });
+  dial.client('softphone-agent');
 
   res.type('text/xml');
   res.send(twiml.toString());
 });
 
 /**
- * POST /api/voice/outbound
- * TwiML App calls this when an outbound call is initiated from the browser.
- * The browser SDK passes `To` in the connection params.
+ * POST /api/voice/outbound  (set this as the Voice Request URL in your TwiML App)
+ * Handles OUTBOUND calls placed from the browser SDK.
+ * The SDK sends the destination number as the "To" param.
  */
 router.post('/outbound', (req, res) => {
   const twiml = new VoiceResponse();
-  const to = req.body.To;
+
+  // Twilio 2.x SDK sends params prefixed — try both
+  const to = req.body.To || req.body['params[To]'] || req.body.to;
+
+  console.log(`[Voice] Outbound request body:`, JSON.stringify(req.body));
 
   if (!to) {
-    twiml.say('No destination number provided.');
+    console.error('[Voice] No To number in outbound request');
+    twiml.say('Sorry, no destination number was provided.');
     res.type('text/xml');
     return res.send(twiml.toString());
   }
 
   console.log(`[Voice] Outbound call to ${to}`);
 
-  const dial = twiml.dial({
-    callerId: process.env.TWILIO_PHONE_NUMBER,
-    record: 'do-not-record',
-  });
+  const dial = twiml.dial({ callerId: process.env.TWILIO_PHONE_NUMBER });
   dial.number(to);
 
   res.type('text/xml');
@@ -72,13 +64,11 @@ router.post('/outbound', (req, res) => {
 
 /**
  * POST /api/voice/status
- * Twilio status callbacks — update clients about call state changes.
+ * Twilio calls this when a call ends/changes state.
  */
 router.post('/status', (req, res) => {
   const { CallSid, CallStatus, Duration, To, From } = req.body;
-
   console.log(`[Voice] Call ${CallSid} → ${CallStatus}`);
-
   broadcast({
     type: 'call_status',
     callSid: CallSid,
@@ -88,29 +78,21 @@ router.post('/status', (req, res) => {
     from: From,
     timestamp: new Date().toISOString(),
   });
-
   res.sendStatus(200);
 });
 
 /**
- * GET /api/voice/calls
- * Fetch recent call log from Twilio.
+ * GET /api/voice/calls — recent call log
  */
 router.get('/calls', async (req, res) => {
   try {
     const calls = await client.calls.list({ limit: 50 });
     res.json(calls.map(c => ({
-      sid: c.sid,
-      from: c.from,
-      to: c.to,
-      status: c.status,
-      direction: c.direction,
-      duration: c.duration,
-      startTime: c.startTime,
-      endTime: c.endTime,
+      sid: c.sid, from: c.from, to: c.to,
+      status: c.status, direction: c.direction,
+      duration: c.duration, startTime: c.startTime,
     })));
   } catch (err) {
-    console.error('[Voice] Error fetching calls:', err);
     res.status(500).json({ error: err.message });
   }
 });

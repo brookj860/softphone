@@ -150,14 +150,8 @@ function handleServerEvent(event) {
 
     case 'outbound_sms':
     case 'outbound_whatsapp':
-      // Sync to other open tabs
-      receiveMessage(event.to, {
-        id: event.sid || event.waId,
-        body: event.body,
-        direction: 'out',
-        channel: event.channel,
-        ts: event.timestamp,
-      }, null, true);
+      // Ignore — already added locally when user hit send
+      // (only needed for multi-tab sync, not single user)
       break;
 
     case 'inbound_call':
@@ -272,7 +266,7 @@ els.btnDialCall.addEventListener('click', () => {
 async function makeCall(to) {
   if (!state.twilioDevice) return showToast('Twilio Voice not ready', 'error');
   try {
-    const conn = await state.twilioDevice.connect({ params: { To: to } });
+    const conn = await state.twilioDevice.connect({ params: { To: to }, rtcConstraints: { audio: true } });
     state.activeCall = conn;
     const name = lookupName(to) || to;
     startCallUI(name, to);
