@@ -46,7 +46,7 @@ const els = {
   callNumber:       $('callNumber'),
   callDuration:     $('callDuration'),
   btnMute:          $('btnMute'),
-  btnHold:          $('btnHold'),
+
   btnEndCall:       $('btnEndCall'),
 
   // Modals
@@ -339,7 +339,8 @@ els.btnMute.addEventListener('click', () => {
   els.btnMute.textContent = muted ? '🔇' : '🎤';
 });
 
-els.btnHold.addEventListener('click', () => {
+// btnHold removed
+if (false) ({
   showToast('Hold requires server-side Twilio REST call — see docs', 'info');
 });
 
