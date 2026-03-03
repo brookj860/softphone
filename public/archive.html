@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Archive — Softphone</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/app.css">
+  <style>
+    /* ── Archive standalone page overrides ── */
+    body { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+
+    .arch-page-root {
+      display: flex; flex-direction: column; flex: 1; overflow: hidden;
+      background: var(--bg);
+    }
+
+    /* Top bar */
+    .arch-topbar {
+      display: flex; align-items: center; gap: 14px;
+      padding: 0 20px; height: 54px; flex-shrink: 0;
+      background: var(--surface); border-bottom: 1px solid var(--border);
+    }
+    .arch-topbar-logo {
+      font-family: var(--mono); font-weight: 700; font-size: 14px;
+      color: var(--accent); letter-spacing: .05em; flex-shrink: 0;
+    }
+    .arch-topbar-title {
+      font-size: 15px; font-weight: 600; flex: 1;
+    }
+    .arch-topbar-back {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 12px; border-radius: 8px;
+      background: transparent; border: 1px solid var(--border);
+      color: var(--text-dim); font-size: 12px; font-family: var(--mono);
+      cursor: pointer; text-decoration: none; flex-shrink: 0;
+      transition: border-color .15s, color .15s;
+    }
+    .arch-topbar-back:hover { border-color: var(--accent); color: var(--accent); }
+    .arch-topbar-theme {
+      background: transparent; border: none; cursor: pointer;
+      color: var(--text-dim); padding: 6px; border-radius: 6px;
+      display: flex; align-items: center;
+    }
+    .arch-topbar-theme:hover { color: var(--text); }
+
+    /* Main layout — tabs sidebar + content */
+    .arch-body {
+      display: flex; flex: 1; overflow: hidden;
+    }
+
+    /* Left sidebar with tab buttons */
+    .arch-sidebar {
+      width: 52px; flex-shrink: 0;
+      background: var(--surface); border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; align-items: center;
+      padding: 12px 0; gap: 6px;
+    }
+    .arch-tab-btn {
+      width: 40px; height: 40px; border-radius: 10px;
+      background: transparent; border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; color: var(--text-dim);
+      transition: background .15s, color .15s;
+      position: relative;
+    }
+    .arch-tab-btn:hover   { background: var(--surface2); color: var(--text); }
+    .arch-tab-btn.active  { background: rgba(242,47,70,.12); color: var(--accent); }
+    .arch-tab-btn .arch-tab-tooltip {
+      position: absolute; left: calc(100% + 10px);
+      background: var(--surface); border: 1px solid var(--border);
+      padding: 4px 10px; border-radius: 6px;
+      font-size: 11px; font-family: var(--mono); white-space: nowrap;
+      opacity: 0; pointer-events: none; transition: opacity .15s;
+      z-index: 50;
+    }
+    .arch-tab-btn:hover .arch-tab-tooltip { opacity: 1; }
+
+    /* Content pane */
+    .arch-content {
+      flex: 1; display: flex; flex-direction: column; overflow: hidden;
+    }
+
+    /* Search bar — sits above the content */
+    .arch-searchbar {
+      padding: 10px 16px; border-bottom: 1px solid var(--border);
+      flex-shrink: 0; background: var(--surface);
+    }
+    .arch-searchbar input {
+      width: 100%; padding: 8px 12px; border-radius: 8px;
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text); font-size: 13px; font-family: var(--sans);
+    }
+    .arch-searchbar input:focus { outline: none; border-color: var(--accent); }
+
+    /* Panels */
+    .arch-panel { display: none; flex: 1; overflow: hidden; flex-direction: column; }
+    .arch-panel.active { display: flex; }
+
+    /* Override arch-msg-layout to fill height */
+    .arch-panel .arch-msg-layout { flex: 1; min-height: 0; }
+    .arch-panel .arch-conv-list  { height: 100%; }
+    .arch-panel .arch-thread-panel { height: 100%; }
+
+    /* Recordings panel */
+    .arch-rec-panel {
+      display: flex; flex-direction: column; flex: 1; overflow: hidden;
+    }
+
+    @media (max-width: 600px) {
+      .arch-sidebar { width: 44px; }
+      .arch-topbar  { padding: 0 12px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="arch-page-root" id="archPageRoot">
+
+  <!-- Top bar -->
+  <header class="arch-topbar">
+    <span class="arch-topbar-logo">SP</span>
+    <span class="arch-topbar-title">Archive</span>
+    <button class="arch-topbar-theme" id="archThemeBtn" title="Toggle theme">
+      <svg class="icon-moon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      <svg class="icon-sun hidden" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+    </button>
+    <a class="arch-topbar-back" href="/" title="Back to softphone">
+      ← Softphone
+    </a>
+  </header>
+
+  <div class="arch-body">
+
+    <!-- Sidebar tab switcher -->
+    <nav class="arch-sidebar">
+      <button class="arch-tab-btn active" data-panel="messages" title="">
+        💬
+        <span class="arch-tab-tooltip">Messages</span>
+      </button>
+      <button class="arch-tab-btn" data-panel="recordings" title="">
+        🎙
+        <span class="arch-tab-tooltip">Recordings</span>
+      </button>
+    </nav>
+
+    <!-- Content -->
+    <div class="arch-content">
+
+      <!-- Search -->
+      <div class="arch-searchbar">
+        <input type="text" id="archSearchInput" placeholder="Search…" autocomplete="off">
+      </div>
+
+      <!-- Messages panel -->
+      <div class="arch-panel active" id="panelMessages">
+        <div class="arch-msg-layout">
+          <div class="arch-conv-list" id="archConvList">
+            <div class="arch-empty">Loading conversations…</div>
+          </div>
+          <div class="arch-thread-panel hidden" id="archThreadPanel">
+            <div class="arch-thread-header" id="archThreadHeader">
+              <button class="arch-back-btn" id="archBackBtn">← Back</button>
+              <div class="arch-thread-title" id="archThreadTitle">—</div>
+              <div class="arch-thread-meta" id="archThreadMeta"></div>
+            </div>
+            <div class="arch-thread-messages" id="archThreadMessages">
+              <div class="arch-empty">Select a conversation to view the thread</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recordings panel -->
+      <div class="arch-panel" id="panelRecordings">
+        <div class="arch-rec-panel">
+          <div class="arch-player hidden" id="archPlayer">
+            <div class="arch-player-info"><span id="archPlayerLabel">—</span></div>
+            <audio id="archAudio" controls preload="none"></audio>
+          </div>
+          <div class="arch-list" id="archRecordingsList">
+            <div class="arch-empty">Loading recordings…</div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- .arch-content -->
+  </div><!-- .arch-body -->
+</div>
+
+<script>
+(function() {
+  // ── Helpers ──────────────────────────────────────────────
+  const $ = id => document.getElementById(id);
+
+  // ── Theme ────────────────────────────────────────────────
+  function applyTheme(light) {
+    document.documentElement.setAttribute('data-theme', light ? 'light' : 'dark');
+    try { localStorage.setItem('sp-theme', light ? 'light' : 'dark'); } catch(_) {}
+    const moon = document.querySelector('.icon-moon');
+    const sun  = document.querySelector('.icon-sun');
+    if (moon) moon.classList.toggle('hidden', light);
+    if (sun)  sun.classList.toggle('hidden', !light);
+  }
+  // Apply immediately
+  try { applyTheme(localStorage.getItem('sp-theme') === 'light'); } catch(_) {}
+
+  $('archThemeBtn').addEventListener('click', () => {
+    applyTheme(document.documentElement.getAttribute('data-theme') !== 'light');
+  });
+
+  // ── Tab switching ────────────────────────────────────────
+  let currentTab = 'messages';
+  document.querySelectorAll('.arch-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.arch-tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.arch-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      currentTab = btn.dataset.panel;
+      $(`panel${currentTab.charAt(0).toUpperCase() + currentTab.slice(1)}`).classList.add('active');
+      if (currentTab === 'recordings') fetchRecordings();
+    });
+  });
+
+  // ── Search ───────────────────────────────────────────────
+  let searchQuery = '';
+  let searchTimer;
+  $('archSearchInput').addEventListener('input', e => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      searchQuery = e.target.value;
+      if (currentTab === 'messages')   fetchConversations();
+      if (currentTab === 'recordings') fetchRecordings();
+    }, 320);
+  });
+
+  // ── Back button (mobile thread → list) ──────────────────
+  $('archBackBtn').addEventListener('click', () => {
+    $('archThreadPanel').classList.add('hidden');
+    document.querySelectorAll('.arch-conv-row').forEach(r => r.classList.remove('active'));
+  });
+
+  // ── Utilities ────────────────────────────────────────────
+  function esc(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function fmtDate(ts) {
+    const now = new Date(), d = new Date(ts);
+    if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    if (d.toDateString() === new Date(now-86400000).toDateString()) return 'Yesterday';
+    return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'});
+  }
+  function fmtFull(ts) {
+    const d = new Date(ts);
+    return d.toLocaleDateString('en-GB',{weekday:'short',day:'2-digit',month:'short',year:'numeric'})
+      + ' ' + d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  }
+  function fmtDur(s) {
+    s = parseInt(s||0);
+    const m = Math.floor(s/60), sec = s%60;
+    return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
+  }
+  function phoneColor(phone) {
+    return `hsl(${(phone.charCodeAt(phone.length-1)*37)%360},40%,38%)`;
+  }
+
+  // ── MESSAGES ─────────────────────────────────────────────
+  async function fetchConversations() {
+    const list = $('archConvList');
+    list.innerHTML = '<div class="arch-empty">Loading…</div>';
+    try {
+      const res  = await fetch(`/api/archive/conversations?q=${encodeURIComponent(searchQuery)}`);
+      const { conversations } = await res.json();
+
+      if (!conversations.length) {
+        list.innerHTML = '<div class="arch-empty">No conversations found.</div>';
+        return;
+      }
+      list.innerHTML = '';
+      conversations.forEach(conv => {
+        const name  = conv.contact_name || conv.phone;
+        const init  = (name[0]||'?').toUpperCase();
+        const color = phoneColor(conv.phone);
+        const ch    = conv.channel === 'whatsapp' ? 'WA' : 'SMS';
+        const row   = document.createElement('div');
+        row.className = 'arch-conv-row';
+        row.dataset.phone = conv.phone;
+        row.innerHTML = `
+          <div class="arch-conv-top">
+            <div class="arch-conv-avatar" style="background:${color}">${init}</div>
+            <div class="arch-conv-name">${esc(name)}</div>
+            <div class="arch-conv-time">${fmtDate(conv.last_ts)}</div>
+          </div>
+          <div class="arch-conv-preview">${esc(conv.last_body||'—')}</div>
+          <div class="arch-conv-stats">
+            <span class="arch-conv-stat">💬 ${conv.message_count}</span>
+            <span class="arch-conv-stat">↓${conv.inbound_count} ↑${conv.outbound_count}</span>
+            <span class="arch-conv-ch tag-${conv.channel||'sms'}">${ch}</span>
+          </div>`;
+        row.addEventListener('click', () => openThread(conv, row));
+        list.appendChild(row);
+      });
+    } catch(e) {
+      list.innerHTML = `<div class="arch-empty">Failed to load.</div>`;
+    }
+  }
+
+  async function openThread(conv, rowEl) {
+    document.querySelectorAll('.arch-conv-row').forEach(r => r.classList.remove('active'));
+    rowEl.classList.add('active');
+
+    const panel   = $('archThreadPanel');
+    const msgArea = $('archThreadMessages');
+    panel.classList.remove('hidden');
+    msgArea.innerHTML = '<div class="arch-empty">Loading…</div>';
+
+    const name = conv.contact_name || conv.phone;
+    $('archThreadTitle').textContent = name;
+    const f = new Date(conv.first_ts), l = new Date(conv.last_ts);
+    $('archThreadMeta').textContent =
+      `${conv.message_count} messages · ${f.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})} – ${l.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}`;
+
+    try {
+      const res  = await fetch(`/api/archive/conversations/${encodeURIComponent(conv.phone)}/messages`);
+      const { messages } = await res.json();
+      msgArea.innerHTML = '';
+      let lastDate = null;
+
+      messages.forEach(m => {
+        const ts      = new Date(m.ts);
+        const dateStr = ts.toDateString();
+        if (dateStr !== lastDate) {
+          lastDate = dateStr;
+          const div = document.createElement('div');
+          div.className = 'arch-day-divider';
+          div.textContent = ts.toLocaleDateString('en-GB',{weekday:'short',day:'2-digit',month:'short',year:'numeric'});
+          msgArea.appendChild(div);
+        }
+        const wrap   = document.createElement('div');
+        wrap.className = `arch-tmsg ${m.direction}`;
+        const sender = document.createElement('div');
+        sender.className = 'arch-tmsg-sender';
+        sender.textContent = m.direction === 'in' ? name : 'You';
+        const bubble = document.createElement('div');
+        bubble.className = 'arch-tmsg-bubble';
+        bubble.textContent = m.body;
+        const time = document.createElement('div');
+        time.className = 'arch-tmsg-time';
+        time.textContent = ts.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+        wrap.appendChild(sender); wrap.appendChild(bubble); wrap.appendChild(time);
+        msgArea.appendChild(wrap);
+      });
+      msgArea.scrollTop = msgArea.scrollHeight;
+    } catch(e) {
+      msgArea.innerHTML = '<div class="arch-empty">Failed to load thread.</div>';
+    }
+  }
+
+  // ── RECORDINGS ───────────────────────────────────────────
+  async function fetchRecordings() {
+    const list = $('archRecordingsList');
+    list.innerHTML = '<div class="arch-empty">Loading…</div>';
+    try {
+      const res  = await fetch('/api/archive/recordings?limit=100');
+      const { recordings } = await res.json();
+      const q = searchQuery.toLowerCase();
+      const filtered = q
+        ? recordings.filter(r => r.from.includes(q) || r.to.includes(q) || (r.label||'').toLowerCase().includes(q))
+        : recordings;
+
+      if (!filtered.length) {
+        list.innerHTML = '<div class="arch-empty">No recordings found.</div>';
+        return;
+      }
+      list.innerHTML = '';
+      filtered.forEach(r => {
+        const ts  = new Date(r.startTime);
+        const row = document.createElement('div');
+        row.className = 'arch-rec-row';
+        const dirColor = r.direction === 'inbound' ? 'var(--sms)' : '#8888cc';
+        const dirIcon  = r.direction === 'inbound' ? '↙' : '↗';
+        row.innerHTML = `
+          <div class="arch-rec-icon" style="color:${dirColor}">${dirIcon}</div>
+          <div class="arch-rec-info">
+            <div class="arch-rec-parties">${esc(r.label || r.fromName + ' → ' + r.toName)}</div>
+            <div class="arch-rec-meta">
+              ${fmtFull(ts)} &nbsp;·&nbsp;
+              <span style="color:var(--text-dim)">${esc(r.from)} → ${esc(r.to)}</span>
+            </div>
+          </div>
+          <div class="arch-rec-dur">${fmtDur(r.duration)}</div>`;
+        row.addEventListener('click', () => playRecording(r, row));
+        list.appendChild(row);
+      });
+    } catch(e) {
+      list.innerHTML = `<div class="arch-empty">Failed to load recordings.</div>`;
+    }
+  }
+
+  function playRecording(r, rowEl) {
+    const player = $('archPlayer'), audio = $('archAudio'), label = $('archPlayerLabel');
+    document.querySelectorAll('.arch-rec-row').forEach(r => r.classList.remove('playing'));
+    rowEl.classList.add('playing');
+    const ts = new Date(r.startTime);
+    label.textContent = `${r.label || r.fromName + ' → ' + r.toName}  ·  ${fmtFull(ts)}  ·  ${fmtDur(r.duration)}`;
+    audio.src = r.audioUrl;
+    player.classList.remove('hidden');
+    audio.play().catch(()=>{});
+  }
+
+  // ── Boot ─────────────────────────────────────────────────
+  // Check auth first
+  fetch('/api/profile').then(r => {
+    if (r.status === 401) { location.href = '/login?next=/archive'; }
+    return r.json();
+  }).then(p => {
+    window._profileName = p.username || 'You';
+    fetchConversations();
+  }).catch(() => {
+    location.href = '/login?next=/archive';
+  });
+
+})();
+</script>
+</body>
+</html>

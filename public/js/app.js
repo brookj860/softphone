@@ -151,7 +151,6 @@ $('navConv')     && $('navConv').addEventListener('click',     () => showScreen(
 $('navDial')     && $('navDial').addEventListener('click',     () => showScreen('dial'));
 $('navContacts') && $('navContacts').addEventListener('click', () => { showScreen('contacts'); loadContacts(); });
 $('navSettings') && $('navSettings').addEventListener('click', () => { showScreen('settings'); loadSettingsPanel(); });
-$('navArchive')  && $('navArchive').addEventListener('click',  () => { showScreen('archive');  loadArchive(); });
 els.backBtn && els.backBtn.addEventListener('click', goBack);
 
 /* ============================================================

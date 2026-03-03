@@ -1151,3 +1151,13 @@ body {
 [data-theme="light"] .arch-tmsg.out .arch-tmsg-bubble {
   background: #ededfc; border-color: #c8c8f0; color: #1a1a2e;
 }
+
+/* ── Settings archive link ──────────────────────────────── */
+.settings-archive-link {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 11px 14px; border-radius: 8px; text-decoration: none;
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); font-size: 13px;
+  transition: border-color .15s;
+}
+.settings-archive-link:hover { border-color: var(--accent); color: var(--accent); }

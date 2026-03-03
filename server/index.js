@@ -60,6 +60,12 @@ app.use((req, res, next) => {
 // Auth
 app.use('/api/auth', authRouter);
 
+// Archive page — serve standalone HTML (auth-gated)
+app.get('/archive', (req, res) => {
+  if (!validSession(req)) return res.redirect('/login?next=/archive');
+  res.sendFile(require('path').join(__dirname, '../public/archive.html'));
+});
+
 // Health
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', configured: isConfigured(), whatsapp: hasWhatsApp(), db: db.isAvailable(), uptime: Math.floor(process.uptime()) });
