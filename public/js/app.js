@@ -260,11 +260,22 @@ async function loadHistory() {
     renderConvList();
     updateUnreadBadge();
 
-    // Second pass: load all messages in parallel so history is ready when you tap a conversation
+    // Second pass: load all messages in parallel
     await Promise.all(
       convs.map(conv => loadMessagesForConversation(normalizePhone(conv.phone)))
     );
     console.log(`[History] Loaded ${convs.length} conversations with messages`);
+
+    // Auto-open the most recent conversation on desktop,
+    // or on mobile only if no conversation is already open
+    const sorted = convs.slice().sort((a, b) => new Date(b.lastTs) - new Date(a.lastTs));
+    if (sorted.length && !state.activePhone) {
+      const mostRecent = normalizePhone(sorted[0].phone);
+      // On desktop: open fully. On mobile: load the chat silently so it's ready when tapped
+      state._silentOpen = isMobile();
+      await openConversation(mostRecent);
+      // On mobile, just highlight it in the list but don't navigate away
+    }
   } catch (e) {
     console.warn('[History] Load failed:', e.message);
   }
@@ -519,8 +530,9 @@ async function openConversation(phone) {
   // Render messages
   renderMessages(phone);
 
-  // On mobile, switch to chat screen
-  openChat(phone);
+  // On mobile only navigate if explicitly triggered by user tap
+  if (!state._silentOpen) openChat(phone);
+  state._silentOpen = false;
 
   els.composeInput.focus();
 }
