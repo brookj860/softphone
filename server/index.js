@@ -47,55 +47,55 @@ app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
-// Simple cookie parser (no extra dependency)
+// Cookie parser
 app.use((req, res, next) => {
   req.cookies = req.headers.cookie ? cookie.parse(req.headers.cookie) : {};
   next();
 });
 
-// Auth routes (public)
+// ── PUBLIC ROUTES (no auth needed) ────────────────────────
+
+// Auth
 app.use('/api/auth', authRouter);
 
-// Health (public)
+// Health
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', configured: isConfigured(), whatsapp: hasWhatsApp(), db: db.isAvailable(), uptime: Math.floor(process.uptime()) });
 });
 
-// Features (public - needed by setup.js)
+// Features (needed by frontend before login)
 app.get('/api/features', (req, res) => {
   res.json({ configured: isConfigured(), whatsapp: hasWhatsApp(), sms: isConfigured(), voice: isConfigured(), db: db.isAvailable() });
 });
 
-// Twilio webhooks (public - Twilio calls these, no cookies)
-// These must be registered before the auth middleware
-const registerWebhooks = () => {
-  if (isConfigured()) {
-    const voiceRouter = require('./routes/voice');
-    const smsRouter   = require('./routes/sms');
-    app.use('/webhook/twilio/voice', voiceRouter);
-    app.use('/webhook/twilio/sms',   smsRouter);
-    if (hasWhatsApp()) {
-      const waRouter = require('./routes/whatsapp');
-      app.use('/webhook/whatsapp', waRouter);
-    }
-    console.log('[Server] Webhooks registered');
+// ── TWILIO/WA WEBHOOKS (public — Twilio has no session cookie) ──
+if (isConfigured()) {
+  const voiceRouter = require('./routes/voice');
+  const smsRouter   = require('./routes/sms');
+  app.use('/webhook/twilio/voice', voiceRouter);
+  app.use('/webhook/twilio/sms',   smsRouter);
+  app.use('/api/voice/outbound',   voiceRouter); // TwiML App URL — must be public
+  app.use('/api/voice/status',     voiceRouter); // Status callback — must be public
+  if (hasWhatsApp()) {
+    const waRouter = require('./routes/whatsapp');
+    app.use('/webhook/whatsapp', waRouter);
   }
-};
-registerWebhooks();
+  console.log('[Server] Webhooks registered (public)');
+}
 
-// Rate limiting on API
+// Rate limiting
 const limiter = rateLimit({ windowMs: 60_000, max: 200, standardHeaders: true, legacyHeaders: false });
 app.use('/api/', limiter);
 
-// ── AUTH GATE: all /api/* routes below require login ────────
+// ── AUTH GATE — all remaining /api/* routes require login ──
 app.use('/api/', (req, res, next) => {
   if (!validSession(req)) {
-    return res.status(401).json({ error: 'Not authenticated', redirect: '/login' });
+    return res.status(401).json({ error: 'Not authenticated' });
   }
   next();
 });
 
-// Protected API routes
+// ── PROTECTED API ROUTES ───────────────────────────────────
 let routesLoaded = false;
 function loadRoutes() {
   if (routesLoaded) return;
@@ -114,14 +114,12 @@ function loadRoutes() {
     const waRouter = require('./routes/whatsapp');
     app.use('/api/whatsapp', waRouter);
   }
-  console.log('[Server] API routes loaded ✓');
+  console.log('[Server] Protected API routes loaded ✓');
 }
 if (isConfigured()) loadRoutes();
 
-// Serve login page for /login route
-app.get('/login', (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/login.html'));
-});
+// Login page
+app.get('/login', (req, res) => res.sendFile(path.join(__dirname, '../public/login.html')));
 
 // Static files
 app.use(express.static(path.join(__dirname, '../public'), {
@@ -130,26 +128,23 @@ app.use(express.static(path.join(__dirname, '../public'), {
   }
 }));
 
-// All other routes -> index.html (SPA)
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, '../public/index.html')));
-
 app.use((err, req, res, _next) => { console.error('[Error]', err.message); res.status(500).json({ error: err.message }); });
 
 const wss = initWebSocket(server);
 app.set('wss', wss);
-
-// Also gate WebSocket connections
-const originalUpgrade = server.listeners('upgrade')[0];
-if (originalUpgrade) server.removeListener('upgrade', originalUpgrade);
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', async () => {
   console.log(`\n🚀 Softphone running on port ${PORT}`);
   console.log(`   Twilio:   ${isConfigured() ? '✓' : '✗ NOT CONFIGURED'}`);
   console.log(`   WhatsApp: ${hasWhatsApp() ? '✓' : 'optional, not set'}`);
-  console.log(`   Login:    ${process.env.APP_PASSWORD ? '✓ Password protected' : '⚠️  No APP_PASSWORD set — anyone can log in!'}`);
+  console.log(`   Login:    ${process.env.APP_PASSWORD ? '✓ Password protected' : '⚠️  No APP_PASSWORD set'}`);
   const dbReady = await db.init();
-  console.log(`   Database: ${dbReady ? '✓ Postgres' : '✗ Not connected (set DATABASE_URL)'}`);
+  console.log(`   Database: ${dbReady ? '✓ Postgres connected' : '✗ Not connected'}`);
+  // Log all DB URL env vars present for debugging
+  const dbVars = ['DATABASE_URL','DATABASE_PRIVATE_URL','DATABASE_PUBLIC_URL'].filter(k => process.env[k]);
+  console.log(`   DB vars found: ${dbVars.length ? dbVars.join(', ') : 'NONE — add Postgres service in Railway'}`);
 });
 
 module.exports = { app, server };

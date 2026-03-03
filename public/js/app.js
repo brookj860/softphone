@@ -140,7 +140,7 @@ els.backBtn      && els.backBtn.addEventListener('click', goBack);
 ============================================================ */
 function connectWS() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  const ws = new WebSocket(`${proto}://${location.host}`);
+  const ws = new WebSocket(`${proto}://${location.host}/ws`);
   state.ws = ws;
 
   ws.onopen = () => {
