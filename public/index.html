@@ -80,7 +80,14 @@
     <div class="conv-panel">
       <div class="conv-header">
         <h2>Conversations</h2>
-        <input class="search-box" type="text" id="convSearch" placeholder="Search…">
+        <div class="smart-search-wrap">
+          <span class="smart-search-icon">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </span>
+          <input class="search-box smart-search" type="text" id="convSearch" placeholder="Search or type a number…" autocomplete="off" inputmode="text">
+          <button class="smart-search-go hidden" id="smartSearchGo">→</button>
+        </div>
+        <div id="smartSuggestions" class="smart-suggestions hidden"></div>
         <div class="filter-tabs">
           <button class="filter-tab active" data-filter="all">All</button>
           <button class="filter-tab" data-filter="whatsapp">WA</button>
@@ -88,8 +95,7 @@
           <button class="filter-tab" data-filter="voice">Calls</button>
         </div>
       </div>
-      <div class="conv-list" id="convList"><div class="empty-state">No conversations yet.<br>Tap + to start one.</div></div>
-      <button class="new-conv-btn" id="newConvBtn">+</button>
+      <div class="conv-list" id="convList"><div class="empty-state">No conversations yet.<br>Type a number above to start one.</div></div>
     </div>
   </div>
 

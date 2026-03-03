@@ -685,7 +685,154 @@ document.querySelectorAll('.filter-tab').forEach(tab => {
 /* ============================================================
    SEARCH
 ============================================================ */
-els.convSearch && els.convSearch.addEventListener('input', renderConvList);
+// ── Smart Search ──────────────────────────────────────────────
+const smartSuggestions = $('smartSuggestions');
+const smartSearchGo    = $('smartSearchGo');
+
+function isPhoneNumber(str) {
+  // Looks like a phone number if it contains mostly digits, +, spaces, dashes
+  return /^[+0-9][0-9 +\-().]{3,}$/.test(str.trim());
+}
+
+function renderSuggestions(query) {
+  if (!query) {
+    smartSuggestions.classList.add('hidden');
+    smartSearchGo.classList.add('hidden');
+    renderConvList();
+    return;
+  }
+
+  const q = query.toLowerCase();
+  const results = [];
+
+  // Search existing conversations
+  Object.values(state.conversations).forEach(conv => {
+    const name = (lookupName(conv.phone) || conv.name || '').toLowerCase();
+    const phone = conv.phone.toLowerCase();
+    if (name.includes(q) || phone.includes(q)) {
+      results.push({ type: 'conversation', conv });
+    }
+  });
+
+  // Search contacts not already in conversations
+  Object.entries(state.contacts).forEach(([phone, name]) => {
+    if (!state.conversations[phone]) {
+      if (name.toLowerCase().includes(q) || phone.includes(q)) {
+        results.push({ type: 'contact', phone, name });
+      }
+    }
+  });
+
+  // If it looks like a phone number, offer to start new conversation
+  const looksLikePhone = isPhoneNumber(query);
+
+  // Show/hide go button
+  if (looksLikePhone) {
+    smartSearchGo.classList.remove('hidden');
+  } else {
+    smartSearchGo.classList.add('hidden');
+  }
+
+  // If no results and not a phone number, just filter list
+  if (!results.length && !looksLikePhone) {
+    smartSuggestions.classList.add('hidden');
+    renderConvList();
+    return;
+  }
+
+  // Build suggestions dropdown
+  smartSuggestions.innerHTML = '';
+  smartSuggestions.classList.remove('hidden');
+
+  results.slice(0, 5).forEach(item => {
+    const div = document.createElement('div');
+    div.className = 'suggestion-item';
+
+    if (item.type === 'conversation' || item.type === 'contact') {
+      const phone = item.type === 'conversation' ? item.conv.phone : item.phone;
+      const name  = item.type === 'conversation' ? (lookupName(phone) || item.conv.name || phone) : item.name;
+      const initial = (name[0] || '?').toUpperCase();
+      div.innerHTML = `
+        <div class="suggestion-avatar" style="background:${phoneColor(phone)}">${initial}</div>
+        <div class="suggestion-info">
+          <div class="suggestion-name">${escHtml(name)}</div>
+          <div class="suggestion-sub">${escHtml(phone)}</div>
+        </div>
+        <div class="suggestion-action">Open</div>
+      `;
+      div.addEventListener('click', () => {
+        clearSearch();
+        if (item.type === 'contact') ensureConversation(phone, name, 'sms');
+        openConversation(phone);
+      });
+    }
+    smartSuggestions.appendChild(div);
+  });
+
+  // "Start conversation with [number]" option if looks like a phone number
+  if (looksLikePhone) {
+    const phone = query.trim().replace(/\s/g, '');
+    const existing = state.conversations[phone];
+    if (!existing) {
+      const div = document.createElement('div');
+      div.className = 'suggestion-item suggestion-new';
+      div.innerHTML = `
+        <div class="suggestion-avatar">+</div>
+        <div class="suggestion-info">
+          <div class="suggestion-name">New conversation</div>
+          <div class="suggestion-sub">${escHtml(phone)}</div>
+        </div>
+        <div class="suggestion-action" style="color:var(--accent)">Start</div>
+      `;
+      div.addEventListener('click', () => {
+        clearSearch();
+        ensureConversation(phone, '', 'sms');
+        openConversation(phone);
+      });
+      smartSuggestions.appendChild(div);
+    }
+  }
+
+  // Also filter the list underneath
+  renderConvList();
+}
+
+function clearSearch() {
+  if (els.convSearch) els.convSearch.value = '';
+  smartSuggestions.classList.add('hidden');
+  smartSearchGo.classList.add('hidden');
+  renderConvList();
+}
+
+els.convSearch && els.convSearch.addEventListener('input', (e) => renderSuggestions(e.target.value));
+els.convSearch && els.convSearch.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') clearSearch();
+  if (e.key === 'Enter') {
+    const val = els.convSearch.value.trim();
+    if (isPhoneNumber(val)) {
+      const phone = val.replace(/\s/g, '');
+      clearSearch();
+      ensureConversation(phone, '', 'sms');
+      openConversation(phone);
+    }
+  }
+});
+
+smartSearchGo && smartSearchGo.addEventListener('click', () => {
+  const val = els.convSearch.value.trim().replace(/\s/g, '');
+  if (val) {
+    clearSearch();
+    ensureConversation(val, '', 'sms');
+    openConversation(val);
+  }
+});
+
+// Close suggestions when clicking outside
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.smart-search-wrap') && !e.target.closest('.smart-suggestions')) {
+    smartSuggestions?.classList.add('hidden');
+  }
+});
 els.contactSearch && els.contactSearch.addEventListener('input', () => loadContacts(els.contactSearch.value));
 
 /* ============================================================
