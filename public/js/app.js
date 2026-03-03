@@ -168,6 +168,50 @@ function handleServerEvent(event) {
   }
 }
 
+// ── Load history from server ──────────────────────────────────
+async function loadHistory() {
+  try {
+    const res = await fetch('/api/conversations');
+    if (!res.ok) return;
+    const convs = await res.json();
+    if (!convs.length) return;
+
+    for (const conv of convs) {
+      // Create conversation in state
+      ensureConversation(conv.phone, conv.name, conv.channel);
+      const c = state.conversations[conv.phone];
+      c.lastBody = conv.lastBody || '';
+      c.lastTs   = conv.lastTs || new Date().toISOString();
+      c.unread   = conv.unread || 0;
+    }
+
+    renderConvList();
+    updateUnreadBadge();
+    console.log(`[History] Loaded ${convs.length} conversations`);
+  } catch (e) {
+    console.warn('[History] Could not load conversations:', e.message);
+  }
+}
+
+async function loadMessagesForConversation(phone) {
+  try {
+    const res = await fetch(`/api/conversations/${encodeURIComponent(phone)}/messages`);
+    if (!res.ok) return;
+    const messages = await res.json();
+    if (!messages.length) return;
+
+    const conv = state.conversations[phone];
+    if (!conv) return;
+
+    // Only load if we don't already have messages (avoid duplicates)
+    if (conv.messages.length === 0) {
+      conv.messages = messages;
+    }
+  } catch (e) {
+    console.warn('[History] Could not load messages:', e.message);
+  }
+}
+
 // ── Twilio Device ─────────────────────────────────────────────
 async function initTwilio() {
   try {
@@ -542,6 +586,14 @@ function openConversation(phone) {
   updateChannelPills();
   updateComposePlaceholder();
 
+  // Load messages from server if not in memory yet
+  if (conv.messages.length === 0) {
+    await loadMessagesForConversation(phone);
+  }
+
+  // Mark as read on server
+  fetch(`/api/conversations/${encodeURIComponent(phone)}/read`, { method: 'POST' }).catch(() => {});
+
   // Render messages
   els.messages.innerHTML = '';
   let lastDay = '';
@@ -841,6 +893,7 @@ function notify(title, body) {
 // ── Boot ──────────────────────────────────────────────────────
 (async () => {
   connectWS();
+  await loadHistory();
   await initTwilio();
   await loadContacts();
   renderConvList();

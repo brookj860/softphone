@@ -2,41 +2,50 @@
 const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
+const db = require('../db');
 
-/**
- * In-memory contacts store.
- * PRODUCTION NOTE: Replace with a real database (Postgres, MongoDB, SQLite etc.)
- * Each contact: { id, name, phone, notes, createdAt }
- */
-let contacts = [];
+// In-memory fallback if no DB
+let memContacts = [];
 
-router.get('/', (req, res) => {
-  const q = (req.query.q || '').toLowerCase();
-  if (q) {
-    return res.json(contacts.filter(c =>
-      c.name.toLowerCase().includes(q) || c.phone.includes(q)
-    ));
+router.get('/', async (req, res) => {
+  if (db.isAvailable()) {
+    return res.json(await db.getContacts(req.query.q || ''));
   }
-  res.json(contacts);
+  const q = (req.query.q || '').toLowerCase();
+  res.json(q ? memContacts.filter(c => c.name.toLowerCase().includes(q) || c.phone.includes(q)) : memContacts);
 });
 
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const { name, phone, notes } = req.body;
   if (!name || !phone) return res.status(400).json({ error: 'name and phone required' });
-  const contact = { id: uuidv4(), name, phone: phone.trim(), notes: notes || '', createdAt: new Date().toISOString() };
-  contacts.push(contact);
+  const id = uuidv4();
+  if (db.isAvailable()) {
+    await db.saveContact(id, name, phone.trim(), notes || '');
+    return res.status(201).json({ id, name, phone: phone.trim(), notes: notes || '' });
+  }
+  const contact = { id, name, phone: phone.trim(), notes: notes || '', created_at: new Date().toISOString() };
+  memContacts.push(contact);
   res.status(201).json(contact);
 });
 
-router.put('/:id', (req, res) => {
-  const idx = contacts.findIndex(c => c.id === req.params.id);
+router.put('/:id', async (req, res) => {
+  const { name, phone, notes } = req.body;
+  if (db.isAvailable()) {
+    await db.saveContact(req.params.id, name, phone, notes);
+    return res.json({ id: req.params.id, name, phone, notes });
+  }
+  const idx = memContacts.findIndex(c => c.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'Not found' });
-  contacts[idx] = { ...contacts[idx], ...req.body, id: contacts[idx].id };
-  res.json(contacts[idx]);
+  memContacts[idx] = { ...memContacts[idx], ...req.body };
+  res.json(memContacts[idx]);
 });
 
-router.delete('/:id', (req, res) => {
-  contacts = contacts.filter(c => c.id !== req.params.id);
+router.delete('/:id', async (req, res) => {
+  if (db.isAvailable()) {
+    await db.deleteContact(req.params.id);
+    return res.sendStatus(204);
+  }
+  memContacts = memContacts.filter(c => c.id !== req.params.id);
   res.sendStatus(204);
 });
 
