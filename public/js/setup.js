@@ -7,17 +7,17 @@
 // Fields split by page
 const SETUP_PAGES = {
   1: [
-    { key: 'PUBLIC_URL',            label: 'Your App URL',          hint: 'e.g. https://myapp.up.railway.app — no trailing slash', type: 'url',      required: true  },
+    { key: 'PUBLIC_URL',            label: 'Your App URL',          hint: 'e.g. https://myapp.up.railway.app — no trailing slash', type: 'text',      required: true  },
     { key: 'TWILIO_ACCOUNT_SID',    label: 'Twilio Account SID',    hint: 'Starts with AC…',                                       type: 'text',     required: true  },
-    { key: 'TWILIO_AUTH_TOKEN',     label: 'Twilio Auth Token',     hint: 'From Twilio console dashboard',                         type: 'password', required: true  },
-    { key: 'TWILIO_PHONE_NUMBER',   label: 'Twilio Phone Number',   hint: 'E.164 format e.g. +441234567890',                       type: 'tel',      required: true  },
+    { key: 'TWILIO_AUTH_TOKEN',     label: 'Twilio Auth Token',     hint: 'From Twilio console dashboard',                         type: 'text', required: true  },
+    { key: 'TWILIO_PHONE_NUMBER',   label: 'Twilio Phone Number',   hint: 'E.164 format e.g. +441234567890',                       type: 'text',      required: true  },
     { key: 'TWILIO_TWIML_APP_SID', label: 'TwiML App SID',        hint: 'Starts with AP… (create in Voice → TwiML Apps)',         type: 'text',     required: true  },
     { key: 'TWILIO_API_KEY',       label: 'Twilio API Key SID',    hint: 'Starts with SK…',                                       type: 'text',     required: true  },
-    { key: 'TWILIO_API_SECRET',    label: 'Twilio API Secret',     hint: 'Shown once when you create the API key',                type: 'password', required: true  },
+    { key: 'TWILIO_API_SECRET',    label: 'Twilio API Secret',     hint: 'Shown once when you create the API key',                type: 'text', required: true  },
   ],
   2: [
     { key: 'WA_PHONE_NUMBER_ID',       label: 'WhatsApp Phone Number ID',      hint: '15-16 digit ID from Meta API Setup page (not the phone number)', type: 'text',     required: true  },
-    { key: 'WA_PERMANENT_TOKEN',       label: 'WhatsApp Permanent Token',      hint: 'Starts with EAA… from Business Settings → System Users',         type: 'password', required: true  },
+    { key: 'WA_PERMANENT_TOKEN',       label: 'WhatsApp Permanent Token',      hint: 'Starts with EAA… from Business Settings → System Users',         type: 'text', required: true  },
     { key: 'WA_BUSINESS_ACCOUNT_ID',  label: 'WhatsApp Business Account ID',  hint: '15-16 digit ID — optional but recommended',                       type: 'text',     required: false },
     { key: 'WA_WEBHOOK_VERIFY_TOKEN', label: 'Webhook Verify Token',           hint: 'Make up any string — you\'ll paste this same value in Meta too', type: 'text',     required: true  },
   ],
@@ -81,6 +81,7 @@ function renderSetupFields(page, values) {
 
 // ── Step navigation ────────────────────────────────────────
 function setupNext(fromPage) {
+  console.log("[Setup] Next clicked, page", fromPage);
   const errors = validatePage(fromPage);
   if (errors.length) {
     showSetupError(errors[0]);
@@ -168,6 +169,7 @@ function launchApp() {
 }
 
 function showSetupError(msg) {
+  console.log("[Setup] Error:", msg);
   const el = document.getElementById('setupError');
   if (!msg) { el.classList.add('hidden'); return; }
   el.textContent = msg;
