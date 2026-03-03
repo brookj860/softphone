@@ -179,8 +179,8 @@ async function initTwilio() {
     // Twilio Voice SDK 2.x API
     const Device = Twilio.Device;
     const device = new Device(token, {
-      codecPreferences: [Device.Codec ? Device.Codec.Opus : 'opus', Device.Codec ? Device.Codec.PCMU : 'pcmu'],
       logLevel: 1,
+      sounds: {},
     });
 
     device.on('registered', () => {
@@ -266,7 +266,7 @@ els.btnDialCall.addEventListener('click', () => {
 async function makeCall(to) {
   if (!state.twilioDevice) return showToast('Twilio Voice not ready', 'error');
   try {
-    const conn = await state.twilioDevice.connect({ params: { To: to }, rtcConstraints: { audio: true } });
+    const conn = await state.twilioDevice.connect({ params: { To: to } });
     state.activeCall = conn;
     const name = lookupName(to) || to;
     startCallUI(name, to);
