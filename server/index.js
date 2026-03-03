@@ -36,7 +36,7 @@ app.use((req, res, next) => {
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Content-Security-Policy', [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' https://sdk.twilio.com https://media.twiliocdn.com",
+    "script-src 'self' 'unsafe-inline' https://sdk.twilio.com https://media.twiliocdn.com https://unpkg.com",
     "script-src-attr 'unsafe-inline'",
     "connect-src 'self' wss: ws: https://sdk.twilio.com https://media.twiliocdn.com https://eventgw.twilio.com https://graph.facebook.com",
     "media-src 'self' blob: https://media.twiliocdn.com",

@@ -182,38 +182,41 @@ async function initTwilio() {
     if (!res.ok) throw new Error('Token fetch failed - check Twilio API Key config');
     const { token } = await res.json();
 
-    Twilio.Device.setup(token, {
-      codecPreferences: ['opus', 'pcmu'],
-      fakeLocalDTMF: true,
-      enableRingingState: true,
-      debug: false,
+    // Twilio Voice SDK 2.x API
+    const Device = Twilio.Device;
+    const device = new Device(token, {
+      codecPreferences: [Device.Codec ? Device.Codec.Opus : 'opus', Device.Codec ? Device.Codec.PCMU : 'pcmu'],
+      logLevel: 1,
     });
 
-    Twilio.Device.ready(() => {
+    device.on('registered', () => {
+      console.log('[Twilio] Device registered');
+      setStatus('twilio', 'online');
+    });
+
+    device.on('ready', () => {
       console.log('[Twilio] Device ready');
       setStatus('twilio', 'online');
     });
 
-    Twilio.Device.error((err) => {
+    device.on('error', (err) => {
       console.error('[Twilio] Error:', err);
       setStatus('twilio', 'offline');
-      showToast('Twilio error: ' + err.message, 'error');
+      showToast('Twilio error: ' + (err.message || err), 'error');
     });
 
-    Twilio.Device.incoming((conn) => {
-      const from = conn.parameters.From || 'Unknown';
-      showIncomingCall(from, null, conn);
+    device.on('incoming', (call) => {
+      const from = call.parameters ? call.parameters.From : 'Unknown';
+      showIncomingCall(from || 'Unknown', null, call);
     });
 
-    Twilio.Device.disconnect(() => { endCallUI(); });
-    Twilio.Device.offline(() => setStatus('twilio', 'offline'));
-    Twilio.Device.cancel(() => { els.incomingModal.classList.add('hidden'); });
+    device.on('tokenWillExpire', () => { initTwilio(); });
+    device.on('unregistered', () => setStatus('twilio', 'offline'));
 
-    state.twilioDevice = {
-      connect: (params) => Twilio.Device.connect(params),
-      disconnectAll: () => Twilio.Device.disconnectAll(),
-    };
+    // Register the device so it can receive calls
+    await device.register();
 
+    state.twilioDevice = device;
     setTimeout(initTwilio, 55 * 60 * 1000);
 
   } catch (err) {
@@ -269,7 +272,7 @@ els.btnDialCall.addEventListener('click', () => {
 function makeCall(to) {
   if (!state.twilioDevice) return showToast('Twilio Voice not ready', 'error');
   try {
-    const conn = state.twilioDevice.connect({ To: to });
+    const conn = await state.twilioDevice.connect({ params: { To: to } });
     state.activeCall = conn;
     const name = lookupName(to) || to;
     startCallUI(name, to);
