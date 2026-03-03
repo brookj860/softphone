@@ -295,63 +295,90 @@ async function loadMessagesForConversation(phone) {
 /* ============================================================
    TWILIO DEVICE
 ============================================================ */
+function waitForSDK() {
+  return new Promise((resolve, reject) => {
+    if (typeof Twilio !== 'undefined' && Twilio.Device) return resolve();
+    let attempts = 0;
+    const check = setInterval(() => {
+      if (typeof Twilio !== 'undefined' && Twilio.Device) {
+        clearInterval(check);
+        resolve();
+      } else if (++attempts > 40) {  // 10 seconds
+        clearInterval(check);
+        reject(new Error('Twilio SDK did not load — check network connection'));
+      }
+    }, 250);
+  });
+}
+
 async function initTwilio() {
   try {
     setStatus('twilio', 'connecting');
 
+    await waitForSDK();
+
     const res = await fetch('/api/token?identity=softphone-agent');
-    if (!res.ok) throw new Error('Token fetch failed — check Twilio API Key in Railway vars');
+    if (!res.ok) throw new Error('Token fetch failed — check TWILIO_API_KEY and TWILIO_API_SECRET in Railway');
     const { token } = await res.json();
 
-    // v1.14 API uses Twilio.Device.setup() as a singleton
-    Twilio.Device.setup(token, {
-      debug: false,
-      enableRingingState: true,
+    // Tear down previous device cleanly
+    if (state.twilioDevice && state.twilioDevice._device) {
+      try {
+        state.twilioDevice._device.removeAllListeners();
+        await state.twilioDevice._device.unregister();
+        state.twilioDevice._device.destroy();
+      } catch (_) {}
+      state.twilioDevice = null;
+    }
+
+    // v2.x API
+    const device = new Twilio.Device(token, {
+      logLevel: 'error',
+      codecPreferences: ['opus', 'pcmu'],
     });
 
-    Twilio.Device.ready(() => {
-      console.log('[Twilio] Device ready');
+    device.on('registered', () => {
+      console.log('[Twilio] registered and ready');
       setStatus('twilio', 'online');
-      // Expose a compatible interface for makeCall
       state.twilioDevice = {
-        ready: true,
-        connect: (params) => Twilio.Device.connect(params),
-        disconnect: () => Twilio.Device.disconnectAll(),
-        disconnectAll: () => Twilio.Device.disconnectAll(),
+        _device: device,
+        connect: (params) => device.connect(params),
+        disconnectAll: () => device.disconnectAll(),
       };
     });
 
-    Twilio.Device.offline(() => {
+    device.on('unregistered', () => {
       setStatus('twilio', 'offline');
       state.twilioDevice = null;
-      setTimeout(initTwilio, 10_000);
     });
 
-    Twilio.Device.error((err) => {
-      console.error('[Twilio] error:', err);
+    device.on('error', (twilioError) => {
+      console.error('[Twilio] error:', twilioError);
+      // Don't show toast for expected re-init errors
+      if (twilioError.code !== 31005) {
+        showToast('Twilio: ' + (twilioError.message || twilioError), 'error');
+      }
       setStatus('twilio', 'offline');
-      showToast('Twilio: ' + (err.message || err), 'error');
     });
 
-    Twilio.Device.incoming((call) => {
-      const from = call.parameters?.From || call.parameters?.from || 'Unknown';
+    device.on('incoming', (call) => {
+      const from = call.parameters?.From || 'Unknown';
       showIncomingCall(from, null, call);
     });
 
-    Twilio.Device.cancel(() => {
-      els.incomingModal.classList.add('hidden');
+    device.on('tokenWillExpire', () => {
+      console.log('[Twilio] token expiring, refreshing...');
+      initTwilio();
     });
 
-    Twilio.Device.disconnect(() => endCallUI());
-
-    // Refresh token before expiry (55 min)
-    setTimeout(initTwilio, 55 * 60 * 1000);
+    await device.register();
+    console.log('[Twilio] register() called');
 
   } catch (err) {
     console.error('[Twilio] init error:', err);
     setStatus('twilio', 'offline');
     showToast('Twilio: ' + err.message, 'error');
-    setTimeout(initTwilio, 10_000);
+    setTimeout(initTwilio, 15_000);
   }
 }
 
@@ -396,7 +423,7 @@ async function makeCall(to) {
   to = normalizePhone(to);
   if (!state.twilioDevice) return showToast('Twilio Voice not ready', 'error');
   try {
-    const conn = Twilio.Device.connect({ To: to });
+    const conn = await state.twilioDevice.connect({ params: { To: to } });
     state.activeCall = conn;
     startCallUI(lookupName(to) || to, to);
     setupCallEvents(conn);
@@ -433,8 +460,12 @@ function endCallUI() {
 }
 
 els.btnEndCall && els.btnEndCall.addEventListener('click', () => {
-  if (state.activeCall && state.activeCall.disconnect) state.activeCall.disconnect();
-  Twilio.Device.disconnectAll();
+  if (state.activeCall) {
+    try { state.activeCall.disconnect(); } catch(_) {}
+  }
+  if (state.twilioDevice) {
+    try { state.twilioDevice.disconnectAll(); } catch(_) {}
+  }
   endCallUI();
 });
 
